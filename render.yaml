@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: macfax-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python macfax_client.py
+    envVars:
+      - key: MACFAX_API_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.12.0
