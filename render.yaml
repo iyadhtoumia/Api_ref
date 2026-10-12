@@ -3,7 +3,7 @@ services:
     name: macfax-api
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python macfax_client.py
+    startCommand: gunicorn app:app
     envVars:
       - key: MACFAX_API_KEY
         sync: false

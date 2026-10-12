@@ -1,156 +1,134 @@
-# Macfax API Client
+# Macfax API Service
 
-Production-ready Python client for the Macfax API - device lookup, pricing data, and marketplace listings for Mac, iPad, and iPhone.
+Production-ready REST API for Mac, iPad, and iPhone device lookup, pricing data, and marketplace listings.
 
 ## Features
 
-- ✅ Complete API coverage (lookup, pricing, listings, reports)
-- ✅ Automatic retry logic with exponential backoff
-- ✅ Rate limit handling with automatic delays
-- ✅ Error handling and custom exceptions
-- ✅ Bulk operations support
-- ✅ Environment-based configuration
-- ✅ Session management for performance
+- 🔍 Device lookup by serial number
+- 💰 Real-time pricing statistics
+- 📊 Market value estimation
+- 🛒 Live marketplace listings
+- ✅ Listing trust verification
+- 🔄 Bulk operations support
 
-## Installation
+## Quick Deploy to Render
 
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 
-2. Copy environment template:
-```bash
-copy .env.example .env
-```
+### Manual Deployment
 
-3. (Optional) Add your API key to `.env`:
-```
-MACFAX_API_KEY=mfx_your_key_here
-```
+1. **Fork/Clone this repo to your GitHub**
 
-## Quick Start
+2. **Go to [render.com](https://render.com)**
 
-```python
-from macfax_client import MacfaxClient
+3. **Create New Web Service**
+   - Click "New +" → "Web Service"
+   - Connect your GitHub repository
+   - Render will auto-detect Python
 
-# Initialize client
-client = MacfaxClient()
+4. **Configure Environment Variable**
+   - Add: `MACFAX_API_KEY`
+   - Get free key: `curl -X POST https://macfax.com/api/v1/keys`
 
-# Look up a serial
-result = client.lookup_serial("C02P73J9G8WP")
-if result['success']:
-    print(result['data']['model'])
+5. **Deploy!**
+   - Click "Create Web Service"
+   - Wait 2-3 minutes
+   - Your API will be live!
 
-# Get price statistics
-result = client.get_price_stats("macbook-pro-14-m3pro-2023")
-if result['success']:
-    print(result['data']['sold']['estimated_sale'])
+## API Endpoints
 
-# Find listings
-result = client.get_listings("macbook-pro-14-m3pro-2023", max_price=1500)
-if result['success']:
-    for listing in result['data']['listings']:
-        print(f"{listing['ask_usd']} - {listing['platform']}")
-```
+| Endpoint | Method | Parameters | Description |
+|----------|--------|------------|-------------|
+| `/` | GET | - | API documentation |
+| `/api/lookup` | GET | `serial` | Look up device by serial |
+| `/api/price` | GET | `config` | Get price statistics |
+| `/api/market` | GET | `model` | Get market value |
+| `/api/listings` | GET | `config`, `max_price` | Find marketplace listings |
+| `/api/check` | GET | `url` | Check listing trust |
+| `/api/bulk` | POST | `{"serials": [...]}` | Bulk lookups |
+| `/health` | GET | - | Health check |
 
 ## Usage Examples
 
-Run the example script:
+### cURL
 ```bash
-python api_example.py
+# Look up device
+curl "https://your-app.onrender.com/api/lookup?serial=C02P73J9G8WP"
+
+# Get pricing
+curl "https://your-app.onrender.com/api/price?config=macbook-pro-14-m3pro-2023"
+
+# Find listings under $1500
+curl "https://your-app.onrender.com/api/listings?config=macbook-pro-14-m3pro-2023&max_price=1500"
 ```
 
-## API Methods
+### JavaScript
+```javascript
+const response = await fetch('https://your-app.onrender.com/api/lookup?serial=C02P73J9G8WP');
+const data = await response.json();
+console.log(data.data.model);
+```
 
-### Device Lookup
+### Python
 ```python
-client.lookup_serial(serial, context=None, run_id=None)
+import requests
+response = requests.get('https://your-app.onrender.com/api/lookup', 
+                       params={'serial': 'C02P73J9G8WP'})
+print(response.json())
 ```
 
-### Pricing
-```python
-client.get_price_stats(config)
-client.get_market_value(model)
+### PHP
+```php
+$serial = "C02P73J9G8WP";
+$url = "https://your-app.onrender.com/api/lookup?serial=" . urlencode($serial);
+$data = json_decode(file_get_contents($url), true);
+echo $data['data']['model'];
 ```
 
-### Listings
-```python
-client.get_listings(config, max_price=None, sort='price_asc', limit=None)
-client.check_listing(url)
-```
+## Demo Page
 
-### Reports & Data
-```python
-client.get_report(report_id)
-client.get_config_data(config)
-```
-
-### Alerts & Management
-```python
-client.create_alert(config, email, max_price=None)
-client.get_api_key()
-client.get_credits()
-```
-
-### Bulk Operations
-```python
-client.bulk_lookup(serials, context='inventory', run_id=None)
-```
-
-## Error Handling
-
-```python
-from macfax_client import MacfaxAPIError, RateLimitError, CreditsExhaustedError
-
-try:
-    result = client.lookup_serial("SERIAL123")
-except RateLimitError as e:
-    print(f"Rate limited. Retry after {e.retry_after} seconds")
-except CreditsExhaustedError:
-    print("Out of credits. Please top up.")
-except MacfaxAPIError as e:
-    print(f"API error: {e}")
-```
+Open `demo.html` in your browser to test the API with a visual interface.
 
 ## Configuration
 
-Edit `.env` file:
+Create `.env.dev` file:
 ```
-MACFAX_API_KEY=mfx_your_key_here
+MACFAX_API_KEY=your_key_here
 MACFAX_BASE_URL=https://macfax.com/api/v1
 MACFAX_TIMEOUT=30
 ```
 
-## Getting an API Key
-
-Anonymous usage works with lower rate limits. Get a free key for 10x higher limits:
-
-```python
-client = MacfaxClient()
-result = client.get_api_key()
-print(result['data']['key'])
-```
-
-Or via PowerShell:
-```powershell
-Invoke-RestMethod -Method Post -Uri 'https://macfax.com/api/v1/keys'
+Get API key:
+```bash
+curl -X POST https://macfax.com/api/v1/keys
 ```
 
 ## Rate Limits
 
-| Endpoint | Anonymous | With Key |
-|----------|-----------|----------|
-| lookup | 10/min · 200/day | 100/min · 2000/day |
-| price-stats | 30/min · 1000/day | 300/min · 10000/day |
-| listings | 20/min · 500/day | 200/min · 5000/day |
+- Macfax Free: 2000 lookups/day
+- Your API: No limits (you control it)
+- Render Free: 750 hours/month
+
+## Local Development
+
+```bash
+pip install -r requirements.txt
+python app.py
+```
+
+Visit: http://localhost:5000
 
 ## Documentation
 
-- API Docs: https://macfax.com/developers
-- OpenAPI Spec: https://macfax.com/api/v1/openapi.json
-- MCP Server: https://macfax.com/mcp
+- Full usage guide: [USAGE_GUIDE.md](USAGE_GUIDE.md)
+- Free deployment options: [FREE_DEPLOYMENT.md](FREE_DEPLOYMENT.md)
+- Macfax API docs: https://macfax.com/developers
 
 ## Support
 
-Email: support@macfax.com
+- Macfax API: support@macfax.com
+- This wrapper: [GitHub Issues](https://github.com/iyadhtoumia/Api_ref/issues)
+
+## License
+
+MIT

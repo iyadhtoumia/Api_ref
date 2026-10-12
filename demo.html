@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border 0.3s;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            display: none;
+        }
+        .result.show {
+            display: block;
+        }
+        .result h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .result-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .result-item:last-child {
+            border-bottom: none;
+        }
+        .result-label {
+            color: #666;
+            font-size: 14px;
+        }
+        .result-value {
+            color: #333;
+            font-size: 18px;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+        .api-url {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍎 Macfax API Demo</h1>
+        <p class="subtitle">Test your deployed API</p>
+        
+        <div class="api-url">
+            <strong>API URL:</strong> <input type="text" id="apiUrl" value="https://YOUR-URL.onrender.com" style="width: auto; display: inline; margin-left: 10px;">
+        </div>
+
+        <div class="form-group">
+            <label for="action">Choose Action:</label>
+            <select id="action" onchange="updateForm()">
+                <option value="lookup">Look up Serial Number</option>
+                <option value="price">Get Price Statistics</option>
+                <option value="market">Get Market Value</option>
+                <option value="listings">Find Listings</option>
+            </select>
+        </div>
+
+        <div id="lookupForm" class="form-group">
+            <label for="serial">Serial Number:</label>
+            <input type="text" id="serial" placeholder="e.g., C02P73J9G8WP">
+        </div>
+
+        <div id="priceForm" class="form-group" style="display:none;">
+            <label for="config">Configuration:</label>
+            <input type="text" id="config" placeholder="e.g., macbook-pro-14-m3pro-2023">
+        </div>
+
+        <div id="marketForm" class="form-group" style="display:none;">
+            <label for="model">Model Name:</label>
+            <input type="text" id="model" placeholder="e.g., MacBook Air (13-inch, M4, 2025)">
+        </div>
+
+        <div id="listingsForm" class="form-group" style="display:none;">
+            <label for="listingConfig">Configuration:</label>
+            <input type="text" id="listingConfig" placeholder="e.g., macbook-pro-14-m3pro-2023">
+            <label for="maxPrice" style="margin-top: 10px;">Max Price (optional):</label>
+            <input type="number" id="maxPrice" placeholder="e.g., 1500">
+        </div>
+
+        <button onclick="callAPI()" id="submitBtn">Submit</button>
+
+        <div id="loading" class="loading" style="display:none;">
+            <p>Loading...</p>
+        </div>
+
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        function updateForm() {
+            const action = document.getElementById('action').value;
+            document.getElementById('lookupForm').style.display = action === 'lookup' ? 'block' : 'none';
+            document.getElementById('priceForm').style.display = action === 'price' ? 'block' : 'none';
+            document.getElementById('marketForm').style.display = action === 'market' ? 'block' : 'none';
+            document.getElementById('listingsForm').style.display = action === 'listings' ? 'block' : 'none';
+        }
+
+        async function callAPI() {
+            const baseURL = document.getElementById('apiUrl').value;
+            const action = document.getElementById('action').value;
+            const resultDiv = document.getElementById('result');
+            const loading = document.getElementById('loading');
+            const btn = document.getElementById('submitBtn');
+
+            resultDiv.innerHTML = '';
+            resultDiv.classList.remove('show');
+            loading.style.display = 'block';
+            btn.disabled = true;
+
+            try {
+                let url;
+                if (action === 'lookup') {
+                    const serial = document.getElementById('serial').value;
+                    url = `${baseURL}/api/lookup?serial=${encodeURIComponent(serial)}`;
+                } else if (action === 'price') {
+                    const config = document.getElementById('config').value;
+                    url = `${baseURL}/api/price?config=${encodeURIComponent(config)}`;
+                } else if (action === 'market') {
+                    const model = document.getElementById('model').value;
+                    url = `${baseURL}/api/market?model=${encodeURIComponent(model)}`;
+                } else if (action === 'listings') {
+                    const config = document.getElementById('listingConfig').value;
+                    const maxPrice = document.getElementById('maxPrice').value;
+                    url = `${baseURL}/api/listings?config=${encodeURIComponent(config)}`;
+                    if (maxPrice) url += `&max_price=${maxPrice}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                loading.style.display = 'none';
+                btn.disabled = false;
+
+                if (data.error) {
+                    resultDiv.innerHTML = `<div class="error">${data.error}</div>`;
+                } else {
+                    displayResult(data, action);
+                }
+                resultDiv.classList.add('show');
+            } catch (error) {
+                loading.style.display = 'none';
+                btn.disabled = false;
+                resultDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                resultDiv.classList.add('show');
+            }
+        }
+
+        function displayResult(data, action) {
+            const resultDiv = document.getElementById('result');
+            let html = '<h3>Results:</h3>';
+
+            if (action === 'lookup' && data.data) {
+                html += `
+                    <div class="result-item">
+                        <div class="result-label">Device Type</div>
+                        <div class="result-value">${data.data.device_type || 'N/A'}</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">Model</div>
+                        <div class="result-value">${data.data.model || 'N/A'}</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">Year</div>
+                        <div class="result-value">${data.data.year || 'N/A'}</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">Status</div>
+                        <div class="result-value">${data.data.status || 'N/A'}</div>
+                    </div>
+                `;
+            } else if (action === 'price' && data.data) {
+                const sold = data.data.sold || {};
+                const estimate = sold.estimated_sale || {};
+                html += `
+                    <div class="result-item">
+                        <div class="result-label">Configuration</div>
+                        <div class="result-value">${data.data.config || 'N/A'}</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">Sale Estimate</div>
+                        <div class="result-value">$${estimate.mid || 'N/A'}</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">Price Range</div>
+                        <div class="result-value">$${estimate.low} - $${estimate.high}</div>
+                    </div>
+                `;
+            } else if (action === 'market' && data.data) {
+                const estimate = data.data.estimate || {};
+                html += `
+                    <div class="result-item">
+                        <div class="result-label">Model</div>
+                        <div class="result-value">${data.data.model || 'N/A'}</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">Value Range</div>
+                        <div class="result-value">$${estimate.low} - $${estimate.high}</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">Mid Value</div>
+                        <div class="result-value">$${estimate.mid}</div>
+                    </div>
+                `;
+            } else if (action === 'listings' && data.data) {
+                const listings = data.data.listings || [];
+                html += `<div class="result-item"><div class="result-label">Found ${listings.length} listings</div></div>`;
+                listings.slice(0, 5).forEach((listing, i) => {
+                    html += `
+                        <div class="result-item">
+                            <div class="result-label">${i + 1}. ${listing.platform}</div>
+                            <div class="result-value">$${listing.ask_usd || 'N/A'}</div>
+                        </div>
+                    `;
+                });
+            } else {
+                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            }
+
+            resultDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
