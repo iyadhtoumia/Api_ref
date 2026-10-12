@@ -3,303 +3,386 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>API Demo</title>
+    <title>Device Lookup - Macfax API</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
             min-height: 100vh;
             padding: 20px;
+            color: #2c3e50;
         }
+        
         .container {
-            max-width: 800px;
-            margin: 0 auto;
+            max-width: 650px;
+            margin: 60px auto;
             background: white;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 50px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
         }
+        
+        .header {
+            margin-bottom: 40px;
+            text-align: center;
+        }
+        
         h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 32px;
+            font-size: 28px;
+            font-weight: 600;
+            color: #1a202c;
+            margin-bottom: 8px;
         }
+        
         .subtitle {
-            color: #666;
-            margin-bottom: 30px;
+            font-size: 15px;
+            color: #718096;
         }
+        
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 24px;
         }
+        
         label {
             display: block;
             margin-bottom: 8px;
-            color: #555;
+            color: #4a5568;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .label-badge {
+            display: inline-block;
+            background: #e6f7f1;
+            color: #059669;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-left: 8px;
             font-weight: 600;
         }
-        input, select {
+        
+        input {
             width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border 0.3s;
+            padding: 12px 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 15px;
+            transition: all 0.2s;
+            background: #fafafa;
         }
-        input:focus, select:focus {
+        
+        input:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #3182ce;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
         }
+        
+        .hint {
+            font-size: 13px;
+            color: #a0aec0;
+            margin-top: 6px;
+        }
+        
         button {
             width: 100%;
             padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #3182ce;
             color: white;
             border: none;
-            border-radius: 8px;
-            font-size: 16px;
+            border-radius: 6px;
+            font-size: 15px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: background 0.2s;
         }
+        
         button:hover {
-            transform: translateY(-2px);
+            background: #2c5aa0;
         }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
         button:disabled {
-            opacity: 0.5;
+            background: #cbd5e0;
             cursor: not-allowed;
         }
-        .result {
-            margin-top: 30px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 10px;
+        
+        .loading {
+            text-align: center;
+            padding: 30px;
             display: none;
         }
+        
+        .loading.show {
+            display: block;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #3182ce;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            color: #718096;
+            font-size: 14px;
+        }
+        
+        .result {
+            margin-top: 32px;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 32px;
+            display: none;
+        }
+        
         .result.show {
             display: block;
         }
-        .result h3 {
-            color: #333;
-            margin-bottom: 15px;
+        
+        .result-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a202c;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
         }
+        
+        .result-title::before {
+            content: "✓";
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            background: #10b981;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 24px;
+            margin-right: 10px;
+            font-size: 14px;
+        }
+        
         .result-item {
-            padding: 10px 0;
-            border-bottom: 1px solid #e0e0e0;
+            padding: 16px 0;
+            border-bottom: 1px solid #f7fafc;
         }
+        
         .result-item:last-child {
             border-bottom: none;
         }
+        
         .result-label {
-            color: #666;
-            font-size: 14px;
-        }
-        .result-value {
-            color: #333;
-            font-size: 18px;
+            font-size: 12px;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
             font-weight: 600;
-            margin-top: 4px;
         }
+        
+        .result-value {
+            font-size: 18px;
+            color: #1a202c;
+            font-weight: 500;
+        }
+        
         .error {
-            background: #fee;
-            color: #c33;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-        }
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: #667eea;
-        }
-        .api-url {
-            background: #f0f0f0;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            font-family: monospace;
+            background: #fff5f5;
+            border: 1px solid #feb2b2;
+            color: #c53030;
+            padding: 16px;
+            border-radius: 6px;
+            margin-top: 24px;
             font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .error strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+        
+        .status-resolved {
+            color: #10b981 !important;
+        }
+        
+        .status-unknown {
+            color: #f59e0b !important;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🍎 Macfax API Demo</h1>
-        <p class="subtitle">Test your deployed API</p>
+        <div class="header">
+            <h1>Device Lookup</h1>
+            <p class="subtitle">Enter a serial number to identify any Mac, iPad, or iPhone</p>
+        </div>
         
-        <div class="api-url">
-            <strong>API URL:</strong> <input type="text" id="apiUrl" value="https://YOUR-URL.onrender.com" style="width: auto; display: inline; margin-left: 10px;">
+        <div class="form-group">
+            <label for="apiUrl">
+                API Endpoint
+                <span class="label-badge">AUTO</span>
+            </label>
+            <input type="text" id="apiUrl" value="http://localhost:5000" readonly>
+            <div class="hint">Automatically detected based on environment</div>
         </div>
 
         <div class="form-group">
-            <label for="action">Choose Action:</label>
-            <select id="action" onchange="updateForm()">
-                <option value="lookup">Look up Serial Number</option>
-                <option value="price">Get Price Statistics</option>
-                <option value="market">Get Market Value</option>
-                <option value="listings">Find Listings</option>
-            </select>
+            <label for="serial">Serial Number</label>
+            <input 
+                type="text" 
+                id="serial" 
+                placeholder="Enter serial number" 
+                autofocus
+                autocomplete="off"
+            >
+            <div class="hint">Example: C02P73J9G8WP or F69D9QC7NF</div>
         </div>
 
-        <div id="lookupForm" class="form-group">
-            <label for="serial">Serial Number:</label>
-            <input type="text" id="serial" placeholder="e.g., C02P73J9G8WP">
-        </div>
+        <button onclick="lookup()" id="submitBtn">Search Device</button>
 
-        <div id="priceForm" class="form-group" style="display:none;">
-            <label for="config">Configuration:</label>
-            <input type="text" id="config" placeholder="e.g., macbook-pro-14-m3pro-2023">
-        </div>
-
-        <div id="marketForm" class="form-group" style="display:none;">
-            <label for="model">Model Name:</label>
-            <input type="text" id="model" placeholder="e.g., MacBook Air (13-inch, M4, 2025)">
-        </div>
-
-        <div id="listingsForm" class="form-group" style="display:none;">
-            <label for="listingConfig">Configuration:</label>
-            <input type="text" id="listingConfig" placeholder="e.g., macbook-pro-14-m3pro-2023">
-            <label for="maxPrice" style="margin-top: 10px;">Max Price (optional):</label>
-            <input type="number" id="maxPrice" placeholder="e.g., 1500">
-        </div>
-
-        <button onclick="callAPI()" id="submitBtn">Submit</button>
-
-        <div id="loading" class="loading" style="display:none;">
-            <p>Loading...</p>
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p class="loading-text">Looking up device...</p>
         </div>
 
         <div id="result" class="result"></div>
     </div>
 
     <script>
-        function updateForm() {
-            const action = document.getElementById('action').value;
-            document.getElementById('lookupForm').style.display = action === 'lookup' ? 'block' : 'none';
-            document.getElementById('priceForm').style.display = action === 'price' ? 'block' : 'none';
-            document.getElementById('marketForm').style.display = action === 'market' ? 'block' : 'none';
-            document.getElementById('listingsForm').style.display = action === 'listings' ? 'block' : 'none';
+        // Auto-detect API URL
+        function detectAPIUrl() {
+            const urlField = document.getElementById('apiUrl');
+            const hostname = window.location.hostname;
+            
+            if (window.location.protocol === 'file:') {
+                urlField.value = 'http://localhost:5000';
+                return;
+            }
+            
+            if (hostname.includes('onrender.com') || hostname.includes('railway.app') || hostname.includes('fly.dev')) {
+                urlField.value = window.location.origin;
+            } else if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                urlField.value = 'http://localhost:5000';
+            } else {
+                urlField.value = window.location.origin;
+            }
         }
 
-        async function callAPI() {
-            const baseURL = document.getElementById('apiUrl').value;
-            const action = document.getElementById('action').value;
+        window.addEventListener('DOMContentLoaded', detectAPIUrl);
+
+        document.getElementById('serial').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') lookup();
+        });
+
+        async function lookup() {
+            const serial = document.getElementById('serial').value.trim();
+            const apiUrl = document.getElementById('apiUrl').value.trim();
             const resultDiv = document.getElementById('result');
             const loading = document.getElementById('loading');
             const btn = document.getElementById('submitBtn');
 
+            if (!serial) {
+                alert('Please enter a serial number');
+                return;
+            }
+
             resultDiv.innerHTML = '';
             resultDiv.classList.remove('show');
-            loading.style.display = 'block';
+            loading.classList.add('show');
             btn.disabled = true;
+            btn.textContent = 'Searching...';
 
             try {
-                let url;
-                if (action === 'lookup') {
-                    const serial = document.getElementById('serial').value;
-                    url = `${baseURL}/api/lookup?serial=${encodeURIComponent(serial)}`;
-                } else if (action === 'price') {
-                    const config = document.getElementById('config').value;
-                    url = `${baseURL}/api/price?config=${encodeURIComponent(config)}`;
-                } else if (action === 'market') {
-                    const model = document.getElementById('model').value;
-                    url = `${baseURL}/api/market?model=${encodeURIComponent(model)}`;
-                } else if (action === 'listings') {
-                    const config = document.getElementById('listingConfig').value;
-                    const maxPrice = document.getElementById('maxPrice').value;
-                    url = `${baseURL}/api/listings?config=${encodeURIComponent(config)}`;
-                    if (maxPrice) url += `&max_price=${maxPrice}`;
-                }
-
+                const url = `${apiUrl}/api/lookup?serial=${encodeURIComponent(serial)}`;
                 const response = await fetch(url);
                 const data = await response.json();
 
-                loading.style.display = 'none';
+                loading.classList.remove('show');
                 btn.disabled = false;
+                btn.textContent = 'Search Device';
 
                 if (data.error) {
-                    resultDiv.innerHTML = `<div class="error">${data.error}</div>`;
+                    resultDiv.innerHTML = `<div class="error"><strong>Error</strong>${data.error}</div>`;
+                } else if (data.success && data.data) {
+                    displayResult(data.data);
                 } else {
-                    displayResult(data, action);
+                    resultDiv.innerHTML = `<div class="error"><strong>Error</strong>Unexpected response format</div>`;
                 }
                 resultDiv.classList.add('show');
             } catch (error) {
-                loading.style.display = 'none';
+                loading.classList.remove('show');
                 btn.disabled = false;
-                resultDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                btn.textContent = 'Search Device';
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <strong>Connection Error</strong>
+                        ${error.message}<br><br>
+                        Make sure the API server is running at ${apiUrl}
+                    </div>
+                `;
                 resultDiv.classList.add('show');
             }
         }
 
-        function displayResult(data, action) {
+        function displayResult(data) {
             const resultDiv = document.getElementById('result');
-            let html = '<h3>Results:</h3>';
-
-            if (action === 'lookup' && data.data) {
+            
+            let html = '<h3 class="result-title">Device Information</h3>';
+            
+            if (data.device_type) {
                 html += `
                     <div class="result-item">
                         <div class="result-label">Device Type</div>
-                        <div class="result-value">${data.data.device_type || 'N/A'}</div>
+                        <div class="result-value">${data.device_type}</div>
                     </div>
+                `;
+            }
+            
+            if (data.model) {
+                html += `
                     <div class="result-item">
                         <div class="result-label">Model</div>
-                        <div class="result-value">${data.data.model || 'N/A'}</div>
+                        <div class="result-value">${data.model}</div>
                     </div>
+                `;
+            }
+            
+            if (data.year) {
+                html += `
                     <div class="result-item">
                         <div class="result-label">Year</div>
-                        <div class="result-value">${data.data.year || 'N/A'}</div>
+                        <div class="result-value">${data.year}</div>
                     </div>
+                `;
+            }
+            
+            if (data.status) {
+                const statusClass = data.status === 'resolved' ? 'status-resolved' : 'status-unknown';
+                html += `
                     <div class="result-item">
                         <div class="result-label">Status</div>
-                        <div class="result-value">${data.data.status || 'N/A'}</div>
+                        <div class="result-value ${statusClass}">${data.status.toUpperCase()}</div>
                     </div>
                 `;
-            } else if (action === 'price' && data.data) {
-                const sold = data.data.sold || {};
-                const estimate = sold.estimated_sale || {};
-                html += `
-                    <div class="result-item">
-                        <div class="result-label">Configuration</div>
-                        <div class="result-value">${data.data.config || 'N/A'}</div>
-                    </div>
-                    <div class="result-item">
-                        <div class="result-label">Sale Estimate</div>
-                        <div class="result-value">$${estimate.mid || 'N/A'}</div>
-                    </div>
-                    <div class="result-item">
-                        <div class="result-label">Price Range</div>
-                        <div class="result-value">$${estimate.low} - $${estimate.high}</div>
-                    </div>
-                `;
-            } else if (action === 'market' && data.data) {
-                const estimate = data.data.estimate || {};
-                html += `
-                    <div class="result-item">
-                        <div class="result-label">Model</div>
-                        <div class="result-value">${data.data.model || 'N/A'}</div>
-                    </div>
-                    <div class="result-item">
-                        <div class="result-label">Value Range</div>
-                        <div class="result-value">$${estimate.low} - $${estimate.high}</div>
-                    </div>
-                    <div class="result-item">
-                        <div class="result-label">Mid Value</div>
-                        <div class="result-value">$${estimate.mid}</div>
-                    </div>
-                `;
-            } else if (action === 'listings' && data.data) {
-                const listings = data.data.listings || [];
-                html += `<div class="result-item"><div class="result-label">Found ${listings.length} listings</div></div>`;
-                listings.slice(0, 5).forEach((listing, i) => {
-                    html += `
-                        <div class="result-item">
-                            <div class="result-label">${i + 1}. ${listing.platform}</div>
-                            <div class="result-value">$${listing.ask_usd || 'N/A'}</div>
-                        </div>
-                    `;
-                });
-            } else {
-                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
             }
 
             resultDiv.innerHTML = html;

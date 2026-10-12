@@ -4,10 +4,12 @@ After deployment, call this API from anywhere
 """
 
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from macfax_client import MacfaxClient, MacfaxAPIError, RateLimitError, CreditsExhaustedError
 import os
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 client = MacfaxClient()
 
 @app.route('/')
