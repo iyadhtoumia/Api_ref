@@ -3,7 +3,7 @@ Flask API for Macfax Research + iFixit Parts Integration
 Fetches real parts data from iFixit API
 """
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from macfax_client import MacfaxClient, MacfaxAPIError, RateLimitError, CreditsExhaustedError
 import os
@@ -382,6 +382,12 @@ def home():
             'listings': '/api/listings?config=macbook-pro-14-m3pro-2023&max_price=1500'
         }
     })
+
+@app.route('/demo')
+@app.route('/demo.html')
+def demo():
+    """Serve demo HTML page"""
+    return send_file('demo.html')
 
 @app.route('/api/lookup', methods=['GET'])
 def lookup():
