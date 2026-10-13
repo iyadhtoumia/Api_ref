@@ -1,392 +1,310 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Device Lookup - Macfax API</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f7fa;
-            min-height: 100vh;
-            padding: 20px;
-            color: #2c3e50;
-        }
-        
-        .container {
-            max-width: 650px;
-            margin: 60px auto;
-            background: white;
-            border-radius: 8px;
-            padding: 50px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-        }
-        
-        .header {
-            margin-bottom: 40px;
-            text-align: center;
-        }
-        
-        h1 {
-            font-size: 28px;
-            font-weight: 600;
-            color: #1a202c;
-            margin-bottom: 8px;
-        }
-        
-        .subtitle {
-            font-size: 15px;
-            color: #718096;
-        }
-        
-        .form-group {
-            margin-bottom: 24px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #4a5568;
-            font-size: 14px;
-            font-weight: 500;
-        }
-        
-        .label-badge {
-            display: inline-block;
-            background: #e6f7f1;
-            color: #059669;
-            font-size: 11px;
-            padding: 2px 8px;
-            border-radius: 4px;
-            margin-left: 8px;
-            font-weight: 600;
-        }
-        
-        input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            font-size: 15px;
-            transition: all 0.2s;
-            background: #fafafa;
-        }
-        
-        input:focus {
-            outline: none;
-            border-color: #3182ce;
-            background: white;
-            box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
-        }
-        
-        .hint {
-            font-size: 13px;
-            color: #a0aec0;
-            margin-top: 6px;
-        }
-        
-        button {
-            width: 100%;
-            padding: 14px;
-            background: #3182ce;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        
-        button:hover {
-            background: #2c5aa0;
-        }
-        
-        button:active {
-            transform: scale(0.98);
-        }
-        
-        button:disabled {
-            background: #cbd5e0;
-            cursor: not-allowed;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 30px;
-            display: none;
-        }
-        
-        .loading.show {
-            display: block;
-        }
-        
-        .spinner {
-            border: 3px solid #f3f4f6;
-            border-top: 3px solid #3182ce;
-            border-radius: 50%;
-            width: 36px;
-            height: 36px;
-            animation: spin 0.8s linear infinite;
-            margin: 0 auto 12px;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        .loading-text {
-            color: #718096;
-            font-size: 14px;
-        }
-        
-        .result {
-            margin-top: 32px;
-            border-top: 1px solid #e2e8f0;
-            padding-top: 32px;
-            display: none;
-        }
-        
-        .result.show {
-            display: block;
-        }
-        
-        .result-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #1a202c;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-        }
-        
-        .result-title::before {
-            content: "✓";
-            display: inline-block;
-            width: 24px;
-            height: 24px;
-            background: #10b981;
-            color: white;
-            border-radius: 50%;
-            text-align: center;
-            line-height: 24px;
-            margin-right: 10px;
-            font-size: 14px;
-        }
-        
-        .result-item {
-            padding: 16px 0;
-            border-bottom: 1px solid #f7fafc;
-        }
-        
-        .result-item:last-child {
-            border-bottom: none;
-        }
-        
-        .result-label {
-            font-size: 12px;
-            color: #718096;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 4px;
-            font-weight: 600;
-        }
-        
-        .result-value {
-            font-size: 18px;
-            color: #1a202c;
-            font-weight: 500;
-        }
-        
-        .error {
-            background: #fff5f5;
-            border: 1px solid #feb2b2;
-            color: #c53030;
-            padding: 16px;
-            border-radius: 6px;
-            margin-top: 24px;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-        
-        .error strong {
-            display: block;
-            margin-bottom: 4px;
-        }
-        
-        .status-resolved {
-            color: #10b981 !important;
-        }
-        
-        .status-unknown {
-            color: #f59e0b !important;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Device Repair Lookup</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f7fa; padding: 20px; color: #2c3e50; }
+.container { max-width: 700px; margin: 40px auto; background: white; border-radius: 8px; padding: 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+h1 { font-size: 26px; font-weight: 600; color: #1a202c; margin-bottom: 10px; text-align: center; }
+.subtitle { font-size: 14px; color: #718096; text-align: center; margin-bottom: 30px; }
+.step { margin-bottom: 30px; opacity: 0.5; pointer-events: none; transition: opacity 0.3s; }
+.step.active { opacity: 1; pointer-events: auto; }
+.step-header { font-size: 12px; color: #3182ce; font-weight: 600; text-transform: uppercase; margin-bottom: 12px; }
+label { display: block; margin-bottom: 8px; color: #4a5568; font-size: 14px; font-weight: 500; }
+input { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 15px; }
+input:focus { outline: none; border-color: #3182ce; box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1); }
+.hint { font-size: 12px; color: #a0aec0; margin-top: 5px; }
+button { width: 100%; padding: 13px; background: #3182ce; color: white; border: none; border-radius: 6px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 10px; }
+button:hover { background: #2c5aa0; }
+button:disabled { background: #cbd5e0; cursor: not-allowed; }
+.loading { text-align: center; padding: 20px; display: none; }
+.loading.show { display: block; }
+.spinner { border: 3px solid #f3f4f6; border-top: 3px solid #3182ce; border-radius: 50%; width: 30px; height: 30px; animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.device-info { background: #f7fafc; padding: 16px; border-radius: 6px; margin: 20px 0; display: none; }
+.device-info.show { display: block; }
+.device-info h4 { font-size: 14px; color: #4a5568; margin-bottom: 10px; }
+.device-detail { font-size: 13px; color: #718096; margin: 4px 0; }
+.device-detail strong { color: #2d3748; }
+.repair-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
+.repair-option { padding: 12px; border: 2px solid #e2e8f0; border-radius: 6px; cursor: pointer; text-align: center; transition: all 0.2s; background: white; }
+.repair-option:hover { border-color: #3182ce; background: #f7fafc; }
+.repair-option.selected { border-color: #3182ce; background: #ebf8ff; }
+.repair-option .icon { font-size: 24px; margin-bottom: 6px; }
+.repair-option .label { font-size: 13px; font-weight: 500; color: #2d3748; }
+.part-card { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px; margin-bottom: 10px; }
+.part-name { font-size: 15px; font-weight: 600; color: #1a202c; margin-bottom: 4px; }
+.part-meta { font-size: 12px; color: #718096; }
+.part-badge { display: inline-block; background: #10b981; color: white; font-size: 11px; padding: 2px 8px; border-radius: 3px; margin-top: 6px; }
+.error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 14px; border-radius: 6px; font-size: 13px; }
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Device Lookup</h1>
-            <p class="subtitle">Enter a serial number to identify any Mac, iPad, or iPhone</p>
-        </div>
-        
-        <div class="form-group">
-            <label for="apiUrl">
-                API Endpoint
-                <span class="label-badge">AUTO</span>
-            </label>
-            <input type="text" id="apiUrl" value="http://localhost:5000" readonly>
-            <div class="hint">Automatically detected based on environment</div>
-        </div>
+<div class="container">
+<h1>🔧 Device Repair Lookup</h1>
+<p class="subtitle">Find genuine Apple parts for your repair</p>
 
-        <div class="form-group">
-            <label for="serial">Serial Number</label>
-            <input 
-                type="text" 
-                id="serial" 
-                placeholder="Enter serial number" 
-                autofocus
-                autocomplete="off"
-            >
-            <div class="hint">Example: C02P73J9G8WP or F69D9QC7NF</div>
-        </div>
+<div class="step active" id="step1">
+<div class="step-header">Step 1: Identify Device</div>
+<input type="hidden" id="apiUrl" value="http://localhost:5000">
+<label for="serial">Serial Number</label>
+<input type="text" id="serial" placeholder="Enter serial number" autocomplete="off">
+<div class="hint">Example: C02P73J9G8WP</div>
+<button onclick="lookupDevice()" id="lookupBtn">Search Device</button>
+<div id="loading1" class="loading">
+<div class="spinner"></div>
+<p style="font-size: 13px; color: #718096;">Looking up device...</p>
+</div>
+</div>
 
-        <button onclick="lookup()" id="submitBtn">Search Device</button>
+<div class="device-info" id="deviceInfo"></div>
 
-        <div id="loading" class="loading">
-            <div class="spinner"></div>
-            <p class="loading-text">Looking up device...</p>
-        </div>
+<div class="step" id="step2">
+<div class="step-header">Step 2: Select Repair Type</div>
+<div class="repair-grid" id="repairGrid"></div>
+<button onclick="findParts()" id="findPartsBtn" style="display:none;">Find Parts</button>
+<div id="loading2" class="loading">
+<div class="spinner"></div>
+<p style="font-size: 13px; color: #718096;">Finding parts...</p>
+</div>
+</div>
 
-        <div id="result" class="result"></div>
-    </div>
+<div class="step" id="step3">
+<div class="step-header">Step 3: Available Parts</div>
+<div id="partsResult"></div>
+</div>
+</div>
 
-    <script>
-        // Auto-detect API URL
-        function detectAPIUrl() {
-            const urlField = document.getElementById('apiUrl');
-            const hostname = window.location.hostname;
-            
-            if (window.location.protocol === 'file:') {
-                urlField.value = 'http://localhost:5000';
-                return;
-            }
-            
-            if (hostname.includes('onrender.com') || hostname.includes('railway.app') || hostname.includes('fly.dev')) {
-                urlField.value = window.location.origin;
-            } else if (hostname === 'localhost' || hostname === '127.0.0.1') {
-                urlField.value = 'http://localhost:5000';
-            } else {
-                urlField.value = window.location.origin;
-            }
-        }
+<script>
+let deviceData = null;
+let selectedRepair = null;
+const APPLE_REPAIR_URL = 'https://selfservicerepair.com';
 
-        window.addEventListener('DOMContentLoaded', detectAPIUrl);
+const repairTypes = [
+{ id: 'screen', icon: '📱', label: 'Screen' },
+{ id: 'battery', icon: '🔋', label: 'Battery' },
+{ id: 'keyboard', icon: '⌨️', label: 'Keyboard' },
+{ id: 'trackpad', icon: '👆', label: 'Trackpad' },
+{ id: 'camera', icon: '📷', label: 'Camera' },
+{ id: 'speaker', icon: '🔊', label: 'Speaker' },
+{ id: 'charging_port', icon: '🔌', label: 'Charging Port' },
+{ id: 'logic_board', icon: '🖥️', label: 'Logic Board' }
+];
 
-        document.getElementById('serial').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') lookup();
-        });
+function detectAPIUrl() {
+const urlField = document.getElementById('apiUrl');
+const hostname = window.location.hostname;
+if (window.location.protocol === 'file:') {
+urlField.value = 'http://localhost:5000';
+} else if (hostname.includes('onrender.com') || hostname.includes('railway.app')) {
+urlField.value = window.location.origin;
+} else if (hostname === 'localhost' || hostname === '127.0.0.1') {
+urlField.value = 'http://localhost:5000';
+} else {
+urlField.value = window.location.origin;
+}
+}
 
-        async function lookup() {
-            const serial = document.getElementById('serial').value.trim();
-            const apiUrl = document.getElementById('apiUrl').value.trim();
-            const resultDiv = document.getElementById('result');
-            const loading = document.getElementById('loading');
-            const btn = document.getElementById('submitBtn');
+window.addEventListener('DOMContentLoaded', detectAPIUrl);
 
-            if (!serial) {
-                alert('Please enter a serial number');
-                return;
-            }
+document.getElementById('serial').addEventListener('keypress', function(e) {
+if (e.key === 'Enter') lookupDevice();
+});
 
-            resultDiv.innerHTML = '';
-            resultDiv.classList.remove('show');
-            loading.classList.add('show');
-            btn.disabled = true;
-            btn.textContent = 'Searching...';
+async function lookupDevice() {
+const serial = document.getElementById('serial').value.trim();
+const apiUrl = document.getElementById('apiUrl').value;
+if (!serial) { alert('Please enter a serial number'); return; }
 
-            try {
-                const url = `${apiUrl}/api/lookup?serial=${encodeURIComponent(serial)}`;
-                const response = await fetch(url);
-                const data = await response.json();
+const loading = document.getElementById('loading1');
+const btn = document.getElementById('lookupBtn');
+loading.classList.add('show');
+btn.disabled = true;
 
-                loading.classList.remove('show');
-                btn.disabled = false;
-                btn.textContent = 'Search Device';
+try {
+const response = await fetch(apiUrl + '/api/lookup?serial=' + encodeURIComponent(serial));
+const data = await response.json();
+loading.classList.remove('show');
+btn.disabled = false;
 
-                if (data.error) {
-                    resultDiv.innerHTML = `<div class="error"><strong>Error</strong>${data.error}</div>`;
-                } else if (data.success && data.data) {
-                    displayResult(data.data);
-                } else {
-                    resultDiv.innerHTML = `<div class="error"><strong>Error</strong>Unexpected response format</div>`;
-                }
-                resultDiv.classList.add('show');
-            } catch (error) {
-                loading.classList.remove('show');
-                btn.disabled = false;
-                btn.textContent = 'Search Device';
-                resultDiv.innerHTML = `
-                    <div class="error">
-                        <strong>Connection Error</strong>
-                        ${error.message}<br><br>
-                        Make sure the API server is running at ${apiUrl}
-                    </div>
-                `;
-                resultDiv.classList.add('show');
-            }
-        }
+if (data.success && data.data) {
+deviceData = data.data;
+displayDeviceInfo(data.data);
+loadRepairTypes();
+document.getElementById('step2').classList.add('active');
+} else {
+alert('Error: ' + (data.error || 'Device not found'));
+}
+} catch (error) {
+loading.classList.remove('show');
+btn.disabled = false;
+alert('Connection error: ' + error.message);
+}
+}
 
-        function displayResult(data) {
-            const resultDiv = document.getElementById('result');
-            
-            let html = '<h3 class="result-title">Device Information</h3>';
-            
-            if (data.device_type) {
-                html += `
-                    <div class="result-item">
-                        <div class="result-label">Device Type</div>
-                        <div class="result-value">${data.device_type}</div>
-                    </div>
-                `;
-            }
-            
-            if (data.model) {
-                html += `
-                    <div class="result-item">
-                        <div class="result-label">Model</div>
-                        <div class="result-value">${data.model}</div>
-                    </div>
-                `;
-            }
-            
-            if (data.year) {
-                html += `
-                    <div class="result-item">
-                        <div class="result-label">Year</div>
-                        <div class="result-value">${data.year}</div>
-                    </div>
-                `;
-            }
-            
-            if (data.status) {
-                const statusClass = data.status === 'resolved' ? 'status-resolved' : 'status-unknown';
-                html += `
-                    <div class="result-item">
-                        <div class="result-label">Status</div>
-                        <div class="result-value ${statusClass}">${data.status.toUpperCase()}</div>
-                    </div>
-                `;
-            }
+function displayDeviceInfo(data) {
+const div = document.getElementById('deviceInfo');
+div.innerHTML = '<h4>✓ Device Identified</h4>' +
+'<div class="device-detail"><strong>Model:</strong> ' + (data.model || 'N/A') + '</div>' +
+'<div class="device-detail"><strong>Type:</strong> ' + (data.device_type || 'N/A') + '</div>' +
+'<div class="device-detail"><strong>Year:</strong> ' + (data.year || 'N/A') + '</div>';
+div.classList.add('show');
+}
 
-            resultDiv.innerHTML = html;
-        }
-    </script>
+function loadRepairTypes() {
+const grid = document.getElementById('repairGrid');
+grid.innerHTML = '';
+repairTypes.forEach(function(type) {
+const option = document.createElement('div');
+option.className = 'repair-option';
+option.onclick = function() { selectRepair(type.id, option); };
+option.innerHTML = '<div class="icon">' + type.icon + '</div><div class="label">' + type.label + '</div>';
+grid.appendChild(option);
+});
+}
+
+function selectRepair(repairId, element) {
+document.querySelectorAll('.repair-option').forEach(function(el) { el.classList.remove('selected'); });
+element.classList.add('selected');
+selectedRepair = repairId;
+document.getElementById('findPartsBtn').style.display = 'block';
+}
+
+async function findParts() {
+if (!selectedRepair || !deviceData) return;
+
+const apiUrl = document.getElementById('apiUrl').value;
+const serial = document.getElementById('serial').value.trim();
+const loading = document.getElementById('loading2');
+const btn = document.getElementById('findPartsBtn');
+loading.classList.add('show');
+btn.disabled = true;
+
+try {
+const url = apiUrl + '/api/parts?serial=' + encodeURIComponent(serial) +
+'&repair_type=' + selectedRepair + 
+'&model=' + encodeURIComponent(deviceData.model) +
+'&device_type=' + encodeURIComponent(deviceData.device_type);
+const response = await fetch(url);
+const data = await response.json();
+loading.classList.remove('show');
+btn.disabled = false;
+
+if (data.success) {
+displayParts(data.data);
+document.getElementById('step3').classList.add('active');
+} else {
+alert('Error: ' + data.error);
+}
+} catch (error) {
+loading.classList.remove('show');
+btn.disabled = false;
+alert('Connection error: ' + error.message);
+}
+}
+
+function displayParts(data) {
+const div = document.getElementById('partsResult');
+let html = '';
+
+// Check if iFixit guides are available
+if (data.source === 'ifixit' && data.guides && data.guides.length > 0) {
+// Display iFixit repair guides
+html += '<div style="background: #ebf8ff; border: 2px solid #3182ce; border-radius: 8px; padding: 20px; margin-bottom: 20px;">';
+html += '<h4 style="color: #1a202c; margin-bottom: 10px;">🔧 ' + data.repair_display_name + ' Repair for ' + data.device_model + '</h4>';
+html += '<p style="font-size: 13px; color: #2d3748; margin-bottom: 15px;">✓ Found ' + data.guides.length + ' iFixit repair guide(s)</p>';
+html += '</div>';
+
+// Display repair guides
+data.guides.forEach(function(guide, index) {
+html += '<div style="background: white; border: 2px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 15px;">';
+
+// Guide header
+html += '<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">';
+html += '<div style="flex: 1;">';
+html += '<h5 style="font-size: 15px; font-weight: 600; color: #1a202c; margin-bottom: 6px;">' + (index + 1) + '. ' + guide.title + '</h5>';
+
+// Difficulty and time
+html += '<div style="font-size: 12px; color: #718096; margin-bottom: 8px;">';
+if (guide.difficulty && guide.difficulty !== 'Unknown') {
+html += '<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 3px; margin-right: 8px;">Difficulty: ' + guide.difficulty + '</span>';
+}
+if (guide.time_required && guide.time_required !== 'Unknown') {
+html += '<span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 3px;">Time: ' + guide.time_required + '</span>';
+}
+html += '</div>';
+html += '</div>';
+
+// Guide image
+if (guide.image) {
+html += '<img src="' + guide.image + '" style="width: 80px; height: 60px; object-fit: cover; border-radius: 6px; margin-left: 15px;">';
+}
+html += '</div>';
+
+// View guide button
+html += '<a href="' + guide.url + '" target="_blank" style="display: inline-block; background: #10b981; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 13px;">View Repair Guide →</a>';
+html += '</div>';
+});
+
+// Display parts if available
+if (data.parts && data.parts.length > 0) {
+html += '<div style="background: #f7fafc; border-radius: 8px; padding: 16px; margin-top: 20px;">';
+html += '<h5 style="font-size: 14px; color: #4a5568; margin-bottom: 12px;">Required Parts & Tools:</h5>';
+
+data.parts.forEach(function(part) {
+html += '<div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 10px;">';
+html += '<div style="font-size: 14px; font-weight: 600; color: #2d3748; margin-bottom: 4px;">' + part.name + '</div>';
+if (part.notes) {
+html += '<div style="font-size: 12px; color: #718096;">' + part.notes + '</div>';
+}
+if (part.url) {
+html += '<a href="' + part.url + '" target="_blank" style="font-size: 12px; color: #3182ce; text-decoration: none; margin-top: 6px; display: inline-block;">View Part →</a>';
+}
+html += '</div>';
+});
+html += '</div>';
+}
+
+// Apple fallback option
+html += '<div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-top: 20px; text-align: center;">';
+html += '<p style="font-size: 13px; color: #4a5568; margin-bottom: 10px;">Need genuine Apple parts?</p>';
+html += '<a href="' + data.apple_repair_url + '" target="_blank" style="display: inline-block; background: #6b7280; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 13px;">Visit Apple Self Service Repair →</a>';
+html += '</div>';
+
+} else {
+// Fallback to Apple Self Service Repair
+html += '<div style="background: #ebf8ff; border: 2px solid #3182ce; border-radius: 8px; padding: 20px; margin-bottom: 20px;">';
+html += '<h4 style="color: #1a202c; margin-bottom: 15px;">🔧 ' + data.repair_display_name + ' Repair for ' + data.device_model + '</h4>';
+html += '<p style="font-size: 14px; color: #2d3748; margin-bottom: 15px;">' + data.message + '</p>';
+
+html += '<div style="background: white; border-radius: 6px; padding: 15px; margin-bottom: 15px;">';
+html += '<div style="margin-bottom: 10px;"><strong style="color: #3182ce;">Step 1:</strong> Visit Apple Self Service Repair</div>';
+html += '<div style="margin-bottom: 10px;"><strong style="color: #3182ce;">Step 2:</strong> Enter Serial: <code style="background: #f7fafc; padding: 4px 8px; border-radius: 4px; font-family: monospace;">' + data.serial + '</code></div>';
+html += '<div style="margin-bottom: 10px;"><strong style="color: #3182ce;">Step 3:</strong> Select repair type: <strong>' + data.repair_display_name + '</strong></div>';
+html += '<div><strong style="color: #3182ce;">Step 4:</strong> View parts, prices, and availability</div>';
+html += '</div>';
+
+html += '<a href="' + data.apple_repair_url + '" target="_blank" style="display: block; text-align: center; background: #3182ce; color: white; padding: 14px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 15px;">Open Apple Self Service Repair →</a>';
+html += '<p style="font-size: 12px; color: #718096; margin-top: 15px; text-align: center;">✓ Official Apple genuine parts with warranty</p>';
+html += '</div>';
+}
+
+// Device info footer
+html += '<div style="background: #f7fafc; border-radius: 6px; padding: 15px; margin-top: 20px;">';
+html += '<h5 style="font-size: 14px; color: #4a5568; margin-bottom: 10px;">Device Information:</h5>';
+html += '<div style="font-size: 13px; color: #718096;">';
+html += '<div style="margin-bottom: 5px;"><strong>Model:</strong> ' + data.device_model + '</div>';
+html += '<div style="margin-bottom: 5px;"><strong>Type:</strong> ' + data.device_type + '</div>';
+html += '<div style="margin-bottom: 5px;"><strong>Serial:</strong> ' + data.serial + '</div>';
+html += '<div><strong>Repair Type:</strong> ' + data.repair_display_name + '</div>';
+html += '</div>';
+html += '</div>';
+
+div.innerHTML = html;
+}
+</script>
 </body>
 </html>
