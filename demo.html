@@ -14,8 +14,8 @@ h1 { font-size: 26px; font-weight: 600; color: #1a202c; margin-bottom: 10px; tex
 .step.active { opacity: 1; pointer-events: auto; }
 .step-header { font-size: 12px; color: #3182ce; font-weight: 600; text-transform: uppercase; margin-bottom: 12px; }
 label { display: block; margin-bottom: 8px; color: #4a5568; font-size: 14px; font-weight: 500; }
-input { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 15px; }
-input:focus { outline: none; border-color: #3182ce; box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1); }
+input, select { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 15px; }
+input:focus, select:focus { outline: none; border-color: #3182ce; box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1); }
 .hint { font-size: 12px; color: #a0aec0; margin-top: 5px; }
 button { width: 100%; padding: 13px; background: #3182ce; color: white; border: none; border-radius: 6px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 10px; }
 button:hover { background: #2c5aa0; }
@@ -29,13 +29,7 @@ button:disabled { background: #cbd5e0; cursor: not-allowed; }
 .device-info h4 { font-size: 14px; color: #4a5568; margin-bottom: 10px; }
 .device-detail { font-size: 13px; color: #718096; margin: 4px 0; }
 .device-detail strong { color: #2d3748; }
-.repair-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
-.repair-option { padding: 12px; border: 2px solid #e2e8f0; border-radius: 6px; cursor: pointer; text-align: center; transition: all 0.2s; background: white; }
-.repair-option:hover { border-color: #3182ce; background: #f7fafc; }
-.repair-option.selected { border-color: #3182ce; background: #ebf8ff; }
-.repair-option .icon { font-size: 24px; margin-bottom: 6px; }
-.repair-option .label { font-size: 13px; font-weight: 500; color: #2d3748; }
-.part-card { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px; margin-bottom: 10px; }
+.error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 14px; border-radius: 6px; font-size: 13px; }
 .part-name { font-size: 15px; font-weight: 600; color: #1a202c; margin-bottom: 4px; }
 .part-meta { font-size: 12px; color: #718096; }
 .part-badge { display: inline-block; background: #10b981; color: white; font-size: 11px; padding: 2px 8px; border-radius: 3px; margin-top: 6px; }
@@ -64,8 +58,30 @@ button:disabled { background: #cbd5e0; cursor: not-allowed; }
 
 <div class="step" id="step2">
 <div class="step-header">Step 2: Select Repair Type</div>
-<div class="repair-grid" id="repairGrid"></div>
-<button onclick="findParts()" id="findPartsBtn" style="display:none;">Find Parts</button>
+<label for="repairType">Repair Type</label>
+<select id="repairType" onchange="selectRepairFromDropdown()">
+<option value="">Choose repair type...</option>
+<option value="screen"> Screen (Écran)</option>
+<option value="battery"> Battery (Batterie)</option>
+<option value="keyboard"> Keyboard (Boîtier supérieur avec clavier)</option>
+<option value="trackpad"> Trackpad (Trackpad et nappe)</option>
+<option value="logic_board"> Logic Board (Carte logique)</option>
+<option value="camera"> Camera</option>
+<option value="speaker_right"> Right Speaker (Haut-parleur droit)</option>
+<option value="speaker_left"> Left Speaker (Haut-parleur gauche)</option>
+<option value="charging_port"> Charging Port</option>
+<option value="magsafe"> MagSafe 3 Card (Carte MagSafe 3)</option>
+<option value="usb_c"> USB-C Cards (Cartes USB-C)</option>
+<option value="display_hinge"> Display Hinge Covers (Couvercles de charnière)</option>
+<option value="keys"> Individual Keys (Touches)</option>
+<option value="antenna"> Antenna (Antenne)</option>
+<option value="bottom_case"> Bottom Case (Boîtier inférieur)</option>
+<option value="audio_card"> Audio Card (Carte audio)</option>
+<option value="touch_id"> Touch ID Card (Carte du Touch ID)</option>
+<option value="lid_angle"> Lid Angle Sensor (Capteur d'angle)</option>
+<option value="other"> Other Parts (Autres pièces)</option>
+</select>
+<button onclick="findParts()" id="findPartsBtn" style="display:none; margin-top: 10px;">Find Parts</button>
 <div id="loading2" class="loading">
 <div class="spinner"></div>
 <p style="font-size: 13px; color: #718096;">Finding parts...</p>
@@ -82,17 +98,6 @@ button:disabled { background: #cbd5e0; cursor: not-allowed; }
 let deviceData = null;
 let selectedRepair = null;
 const APPLE_REPAIR_URL = 'https://selfservicerepair.com';
-
-const repairTypes = [
-{ id: 'screen', icon: '📱', label: 'Screen' },
-{ id: 'battery', icon: '🔋', label: 'Battery' },
-{ id: 'keyboard', icon: '⌨️', label: 'Keyboard' },
-{ id: 'trackpad', icon: '👆', label: 'Trackpad' },
-{ id: 'camera', icon: '📷', label: 'Camera' },
-{ id: 'speaker', icon: '🔊', label: 'Speaker' },
-{ id: 'charging_port', icon: '🔌', label: 'Charging Port' },
-{ id: 'logic_board', icon: '🖥️', label: 'Logic Board' }
-];
 
 function detectAPIUrl() {
 const urlField = document.getElementById('apiUrl');
@@ -133,7 +138,6 @@ btn.disabled = false;
 if (data.success && data.data) {
 deviceData = data.data;
 displayDeviceInfo(data.data);
-loadRepairTypes();
 document.getElementById('step2').classList.add('active');
 } else {
 alert('Error: ' + (data.error || 'Device not found'));
@@ -154,23 +158,15 @@ div.innerHTML = '<h4>✓ Device Identified</h4>' +
 div.classList.add('show');
 }
 
-function loadRepairTypes() {
-const grid = document.getElementById('repairGrid');
-grid.innerHTML = '';
-repairTypes.forEach(function(type) {
-const option = document.createElement('div');
-option.className = 'repair-option';
-option.onclick = function() { selectRepair(type.id, option); };
-option.innerHTML = '<div class="icon">' + type.icon + '</div><div class="label">' + type.label + '</div>';
-grid.appendChild(option);
-});
+function selectRepairFromDropdown() {
+const select = document.getElementById('repairType');
+selectedRepair = select.value;
+const btn = document.getElementById('findPartsBtn');
+if (selectedRepair) {
+btn.style.display = 'block';
+} else {
+btn.style.display = 'none';
 }
-
-function selectRepair(repairId, element) {
-document.querySelectorAll('.repair-option').forEach(function(el) { el.classList.remove('selected'); });
-element.classList.add('selected');
-selectedRepair = repairId;
-document.getElementById('findPartsBtn').style.display = 'block';
 }
 
 async function findParts() {
@@ -210,96 +206,107 @@ function displayParts(data) {
 const div = document.getElementById('partsResult');
 let html = '';
 
-// Check if iFixit guides are available
-if (data.source === 'ifixit' && data.guides && data.guides.length > 0) {
-// Display iFixit repair guides
+// Header
 html += '<div style="background: #ebf8ff; border: 2px solid #3182ce; border-radius: 8px; padding: 20px; margin-bottom: 20px;">';
-html += '<h4 style="color: #1a202c; margin-bottom: 10px;">🔧 ' + data.repair_display_name + ' Repair for ' + data.device_model + '</h4>';
-html += '<p style="font-size: 13px; color: #2d3748; margin-bottom: 15px;">✓ Found ' + data.guides.length + ' iFixit repair guide(s)</p>';
+html += '<h4 style="color: #1a202c; margin-bottom: 8px;">🔧 Replacement Parts for ' + data.repair_display_name + ' Repair</h4>';
+html += '<p style="font-size: 14px; color: #2d3748; margin-bottom: 4px;"><strong>Device:</strong> ' + data.device_model + '</p>';
+html += '<p style="font-size: 13px; color: #2d3748;">' + data.message + '</p>';
 html += '</div>';
 
-// Display repair guides
-data.guides.forEach(function(guide, index) {
-html += '<div style="background: white; border: 2px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 15px;">';
+// Display replacement parts
+if (data.parts && data.parts.length > 0) {
+html += '<div style="margin-bottom: 20px;">';
+html += '<h5 style="font-size: 16px; color: #2d3748; margin-bottom: 15px;">📦 Replacement Parts You Need:</h5>';
 
-// Guide header
-html += '<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">';
+data.parts.forEach(function(part, index) {
+html += '<div style="background: white; border: 2px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 15px;">';
+
+// Part thumbnail
+if (part.thumbnail) {
+html += '<img src="' + part.thumbnail + '" style="width: 100px; height: 100px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0;">';
+} else {
+html += '<div style="width: 100px; height: 100px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 40px; color: white;">';
+html += '📦';
+html += '</div>';
+}
+
+// Part details
 html += '<div style="flex: 1;">';
-html += '<h5 style="font-size: 15px; font-weight: 600; color: #1a202c; margin-bottom: 6px;">' + (index + 1) + '. ' + guide.title + '</h5>';
+html += '<div style="font-size: 16px; font-weight: 600; color: #1a202c; margin-bottom: 6px;">' + part.name + '</div>';
 
-// Difficulty and time
+// Replacement part badge
+html += '<span style="background: #10b981; color: white; font-size: 11px; padding: 4px 10px; border-radius: 3px; margin-right: 6px; font-weight: 600;">REPLACEMENT PART</span>';
+
+// Price if available
+if (part.price && part.price !== 'See website') {
+html += '<span style="background: #3182ce; color: white; font-size: 12px; padding: 4px 10px; border-radius: 3px; margin-right: 6px; font-weight: 600;">' + part.price + '</span>';
+}
+
+// Notes
+if (part.notes) {
+html += '<div style="font-size: 13px; color: #4b5563; margin-top: 8px; line-height: 1.5;">' + part.notes + '</div>';
+}
+
+// Availability
+if (part.availability && part.availability !== 'Check availability') {
+html += '<div style="font-size: 12px; color: #059669; margin-top: 6px; font-weight: 500;">✓ ' + part.availability + '</div>';
+}
+
+html += '</div>';
+
+// Buy button
+if (part.url) {
+html += '<a href="' + part.url + '" target="_blank" style="background: #10b981; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px; white-space: nowrap; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);">Buy Part →</a>';
+}
+
+html += '</div>';
+});
+
+html += '</div>';
+} else {
+html += '<div style="background: #fef3c7; border: 2px solid #fbbf24; border-radius: 6px; padding: 20px; margin-bottom: 20px; text-align: center;">';
+html += '<p style="color: #92400e; font-size: 15px; margin: 0; font-weight: 500;">⚠️ No replacement parts found on iFixit for this repair type.</p>';
+html += '<p style="color: #92400e; font-size: 13px; margin: 10px 0 0 0;">Try Apple Self Service Repair below for genuine parts.</p>';
+html += '</div>';
+}
+
+// Show repair guides if available (collapsed/secondary)
+if (data.guides && data.guides.length > 0) {
+html += '<details style="background: #f7fafc; border-radius: 8px; padding: 16px; margin-bottom: 20px;">';
+html += '<summary style="font-size: 14px; color: #4a5568; font-weight: 600; cursor: pointer; user-select: none;">📖 View Repair Guides (' + data.guides.length + ' available)</summary>';
+html += '<div style="margin-top: 12px;">';
+
+data.guides.forEach(function(guide, index) {
+html += '<div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-top: 10px;">';
+html += '<div style="font-size: 14px; font-weight: 600; color: #2d3748; margin-bottom: 6px;">' + guide.title + '</div>';
+
+if (guide.difficulty || guide.time_required) {
 html += '<div style="font-size: 12px; color: #718096; margin-bottom: 8px;">';
 if (guide.difficulty && guide.difficulty !== 'Unknown') {
-html += '<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 3px; margin-right: 8px;">Difficulty: ' + guide.difficulty + '</span>';
+html += '<span style="margin-right: 12px;">📊 ' + guide.difficulty + '</span>';
 }
 if (guide.time_required && guide.time_required !== 'Unknown') {
-html += '<span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 3px;">Time: ' + guide.time_required + '</span>';
+html += '<span>⏱️ ' + guide.time_required + '</span>';
 }
 html += '</div>';
-html += '</div>';
-
-// Guide image
-if (guide.image) {
-html += '<img src="' + guide.image + '" style="width: 80px; height: 60px; object-fit: cover; border-radius: 6px; margin-left: 15px;">';
 }
-html += '</div>';
 
-// View guide button
-html += '<a href="' + guide.url + '" target="_blank" style="display: inline-block; background: #10b981; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 13px;">View Repair Guide →</a>';
+html += '<a href="' + guide.url + '" target="_blank" style="color: #3182ce; text-decoration: none; font-size: 13px; font-weight: 500;">View Step-by-Step Guide →</a>';
 html += '</div>';
 });
 
-// Display parts if available
-if (data.parts && data.parts.length > 0) {
-html += '<div style="background: #f7fafc; border-radius: 8px; padding: 16px; margin-top: 20px;">';
-html += '<h5 style="font-size: 14px; color: #4a5568; margin-bottom: 12px;">Required Parts & Tools:</h5>';
-
-data.parts.forEach(function(part) {
-html += '<div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 10px;">';
-html += '<div style="font-size: 14px; font-weight: 600; color: #2d3748; margin-bottom: 4px;">' + part.name + '</div>';
-if (part.notes) {
-html += '<div style="font-size: 12px; color: #718096;">' + part.notes + '</div>';
-}
-if (part.url) {
-html += '<a href="' + part.url + '" target="_blank" style="font-size: 12px; color: #3182ce; text-decoration: none; margin-top: 6px; display: inline-block;">View Part →</a>';
-}
 html += '</div>';
-});
-html += '</div>';
-}
-
-// Apple fallback option
-html += '<div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-top: 20px; text-align: center;">';
-html += '<p style="font-size: 13px; color: #4a5568; margin-bottom: 10px;">Need genuine Apple parts?</p>';
-html += '<a href="' + data.apple_repair_url + '" target="_blank" style="display: inline-block; background: #6b7280; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 13px;">Visit Apple Self Service Repair →</a>';
-html += '</div>';
-
-} else {
-// Fallback to Apple Self Service Repair
-html += '<div style="background: #ebf8ff; border: 2px solid #3182ce; border-radius: 8px; padding: 20px; margin-bottom: 20px;">';
-html += '<h4 style="color: #1a202c; margin-bottom: 15px;">🔧 ' + data.repair_display_name + ' Repair for ' + data.device_model + '</h4>';
-html += '<p style="font-size: 14px; color: #2d3748; margin-bottom: 15px;">' + data.message + '</p>';
-
-html += '<div style="background: white; border-radius: 6px; padding: 15px; margin-bottom: 15px;">';
-html += '<div style="margin-bottom: 10px;"><strong style="color: #3182ce;">Step 1:</strong> Visit Apple Self Service Repair</div>';
-html += '<div style="margin-bottom: 10px;"><strong style="color: #3182ce;">Step 2:</strong> Enter Serial: <code style="background: #f7fafc; padding: 4px 8px; border-radius: 4px; font-family: monospace;">' + data.serial + '</code></div>';
-html += '<div style="margin-bottom: 10px;"><strong style="color: #3182ce;">Step 3:</strong> Select repair type: <strong>' + data.repair_display_name + '</strong></div>';
-html += '<div><strong style="color: #3182ce;">Step 4:</strong> View parts, prices, and availability</div>';
-html += '</div>';
-
-html += '<a href="' + data.apple_repair_url + '" target="_blank" style="display: block; text-align: center; background: #3182ce; color: white; padding: 14px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 15px;">Open Apple Self Service Repair →</a>';
-html += '<p style="font-size: 12px; color: #718096; margin-top: 15px; text-align: center;">✓ Official Apple genuine parts with warranty</p>';
-html += '</div>';
+html += '</details>';
 }
 
 // Device info footer
-html += '<div style="background: #f7fafc; border-radius: 6px; padding: 15px; margin-top: 20px;">';
+html += '<div style="background: #f7fafc; border-radius: 6px; padding: 15px;">';
 html += '<h5 style="font-size: 14px; color: #4a5568; margin-bottom: 10px;">Device Information:</h5>';
-html += '<div style="font-size: 13px; color: #718096;">';
-html += '<div style="margin-bottom: 5px;"><strong>Model:</strong> ' + data.device_model + '</div>';
-html += '<div style="margin-bottom: 5px;"><strong>Type:</strong> ' + data.device_type + '</div>';
-html += '<div style="margin-bottom: 5px;"><strong>Serial:</strong> ' + data.serial + '</div>';
-html += '<div><strong>Repair Type:</strong> ' + data.repair_display_name + '</div>';
+html += '<div style="font-size: 13px; color: #718096; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">';
+html += '<div><strong>Model:</strong> ' + data.device_model + '</div>';
+html += '<div><strong>Repair:</strong> ' + data.repair_display_name + '</div>';
+html += '<div><strong>Type:</strong> ' + data.device_type + '</div>';
+html += '<div><strong>Serial:</strong> ' + data.serial + '</div>';
 html += '</div>';
 html += '</div>';
 

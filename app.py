@@ -98,39 +98,98 @@ def get_ifixit_guides(device_name, repair_type):
         return []
 
 def get_ifixit_parts_from_guide(guide_id):
-    """Fetch parts list from a specific guide"""
+    """Fetch replacement parts list from a specific guide (exclude tools)"""
     try:
         url = f"{IFIXIT_API_BASE}/guides/{guide_id}"
         response = requests.get(url, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
+            parts_list = []
             
+            # Extract ONLY replacement parts from guide (not tools)
             if data and 'parts' in data:
-                parts = []
                 for part in data['parts']:
-                    parts.append({
+                    part_info = {
                         'name': part.get('text', 'Unknown Part'),
                         'url': part.get('url', ''),
                         'thumbnail': part.get('thumbnail', ''),
-                        'notes': part.get('notes', '')
-                    })
-                return parts
-            elif data and 'tools' in data:
-                # Sometimes parts are listed as tools
-                parts = []
-                for tool in data['tools']:
-                    parts.append({
-                        'name': tool.get('text', 'Unknown Tool'),
-                        'url': tool.get('url', ''),
-                        'thumbnail': tool.get('thumbnail', ''),
-                        'notes': 'Tool required for repair'
-                    })
-                return parts
+                        'notes': part.get('notes', ''),
+                        'type': 'replacement_part'
+                    }
+                    
+                    # Try to get price and SKU from URL if available
+                    part_url = part.get('url', '')
+                    if part_url:
+                        part_info['sku'] = extract_sku_from_url(part_url)
+                    
+                    parts_list.append(part_info)
+            
+            # DO NOT include tools - we only want replacement parts
+            
+            return parts_list
         
         return []
     except Exception as e:
         print(f"iFixit parts fetch error: {e}")
+        return []
+
+def extract_sku_from_url(url):
+    """Extract SKU/product ID from iFixit URL"""
+    try:
+        # iFixit URLs often end with product codes
+        parts = url.rstrip('/').split('/')
+        if len(parts) > 0:
+            return parts[-1]
+    except:
+        pass
+    return None
+
+def search_ifixit_parts_direct(device_name, repair_type):
+    """Search for replacement parts directly in iFixit store (exclude tools)"""
+    try:
+        # Build search query for replacement parts only
+        search_query = f"{device_name} {repair_type} replacement"
+        url = f"{IFIXIT_API_BASE}/search/{requests.utils.quote(search_query)}"
+        
+        response = requests.get(url, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            parts = []
+            
+            # Filter keywords for tools to exclude
+            tool_keywords = ['screwdriver', 'opener', 'pry', 'spudger', 'tweezers', 'suction', 
+                           'pick', 'driver', 'bit set', 'toolkit', 'repair kit', 'tool']
+            
+            if data and 'results' in data:
+                for result in data['results']:
+                    # Look for product/part results only
+                    if result.get('dataType') in ['product', 'item']:
+                        title = result.get('title', '').lower()
+                        
+                        # Skip if it's a tool
+                        is_tool = any(keyword in title for keyword in tool_keywords)
+                        if is_tool:
+                            continue
+                        
+                        # Only include actual replacement parts (battery, screen, etc.)
+                        part_info = {
+                            'name': result.get('title', 'Unknown Part'),
+                            'url': result.get('url', ''),
+                            'thumbnail': result.get('image', {}).get('thumbnail') if result.get('image') else None,
+                            'price': result.get('price_string', 'See website'),
+                            'availability': result.get('availability', 'Check availability'),
+                            'type': 'replacement_part',
+                            'source': 'store'
+                        }
+                        parts.append(part_info)
+            
+            return parts
+        
+        return []
+    except Exception as e:
+        print(f"iFixit parts search error: {e}")
         return []
 
 def get_device_category(device_type):
@@ -159,7 +218,7 @@ def get_device_category(device_type):
 
 @app.route('/api/parts', methods=['GET'])
 def get_parts():
-    """Fetch parts from iFixit API"""
+    """Fetch matching parts from iFixit API"""
     serial = request.args.get('serial')
     repair_type = request.args.get('repair_type')
     model = request.args.get('model', '')
@@ -176,21 +235,56 @@ def get_parts():
             'keyboard': 'Keyboard',
             'trackpad': 'Trackpad',
             'camera': 'Camera',
-            'speaker': 'Speaker',
+            'speaker_right': 'Right Speaker',
+            'speaker_left': 'Left Speaker',
             'charging_port': 'Charging Port',
-            'logic_board': 'Logic Board'
+            'logic_board': 'Logic Board',
+            'magsafe': 'MagSafe 3 Card',
+            'usb_c': 'USB-C Cards',
+            'display_hinge': 'Display Hinge Covers',
+            'keys': 'Individual Keys',
+            'antenna': 'Antenna',
+            'bottom_case': 'Bottom Case',
+            'audio_card': 'Audio Card',
+            'touch_id': 'Touch ID Card',
+            'lid_angle': 'Lid Angle Sensor',
+            'other': 'Other Parts'
         }
         
         repair_display_name = repair_names.get(repair_type, repair_type.title())
         
         # Convert device model to iFixit search format
         device_name = get_ifixit_device_name(model, device_type)
-        print(f"Searching iFixit for: {device_name} - {repair_display_name}")
+        print(f"Searching iFixit parts for: {device_name} - {repair_display_name}")
         
-        # Search for repair guides on iFixit
+        # Strategy 1: Search for repair guides to get parts lists
         guides = get_ifixit_guides(device_name, repair_display_name)
+        all_parts = []
         
-        if not guides:
+        # Get parts from guides
+        if guides and len(guides) > 0:
+            print(f"Found {len(guides)} guides, extracting parts...")
+            for guide in guides[:3]:  # Top 3 guides
+                guide_id = guide.get('guide_id')
+                if guide_id:
+                    parts = get_ifixit_parts_from_guide(guide_id)
+                    all_parts.extend(parts)
+        
+        # Strategy 2: Direct parts search
+        print(f"Searching iFixit store for parts...")
+        store_parts = search_ifixit_parts_direct(device_name, repair_display_name)
+        all_parts.extend(store_parts)
+        
+        # Remove duplicates based on name
+        seen_names = set()
+        unique_parts = []
+        for part in all_parts:
+            part_name = part.get('name', '').lower()
+            if part_name and part_name not in seen_names:
+                seen_names.add(part_name)
+                unique_parts.append(part)
+        
+        if not unique_parts:
             # Fallback to Apple Self Service Repair
             return jsonify({
                 'success': True,
@@ -202,18 +296,11 @@ def get_parts():
                     'serial': serial,
                     'source': 'apple',
                     'apple_repair_url': f"{APPLE_REPAIR_URL}/order",
-                    'guides': [],
                     'parts': [],
-                    'message': f'No iFixit guides found. Visit Apple Self Service Repair for genuine parts.'
+                    'message': f'No parts found on iFixit. Visit Apple Self Service Repair for genuine {repair_display_name} parts.',
+                    'guides': guides if guides else []
                 }
             })
-        
-        # Get parts from the first guide
-        parts = []
-        if guides and len(guides) > 0:
-            guide_id = guides[0].get('guide_id')
-            if guide_id:
-                parts = get_ifixit_parts_from_guide(guide_id)
         
         return jsonify({
             'success': True,
@@ -225,15 +312,18 @@ def get_parts():
                 'serial': serial,
                 'source': 'ifixit',
                 'device_name': device_name,
-                'guides': guides,
-                'parts': parts,
+                'parts': unique_parts,
+                'total_parts': len(unique_parts),
                 'apple_repair_url': f"{APPLE_REPAIR_URL}/order",
-                'message': f'Found {len(guides)} repair guide(s) for {device_name}'
+                'message': f'Found {len(unique_parts)} replacement part(s) for {repair_display_name} repair',
+                'guides': guides if guides else []
             }
         })
         
     except Exception as e:
         print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
@@ -243,14 +333,25 @@ def get_parts():
 def get_repair_types():
     """Get available repair types"""
     repair_types = [
-        {'id': 'screen', 'name': 'Screen', 'available': True},
-        {'id': 'battery', 'name': 'Battery', 'available': True},
-        {'id': 'keyboard', 'name': 'Keyboard', 'available': True},
-        {'id': 'trackpad', 'name': 'Trackpad', 'available': True},
+        {'id': 'screen', 'name': 'Screen (Écran)', 'available': True},
+        {'id': 'battery', 'name': 'Battery (Batterie)', 'available': True},
+        {'id': 'keyboard', 'name': 'Keyboard (Boîtier supérieur avec clavier)', 'available': True},
+        {'id': 'trackpad', 'name': 'Trackpad (Trackpad et nappe)', 'available': True},
+        {'id': 'logic_board', 'name': 'Logic Board (Carte logique)', 'available': True},
         {'id': 'camera', 'name': 'Camera', 'available': True},
-        {'id': 'speaker', 'name': 'Speaker', 'available': True},
+        {'id': 'speaker_right', 'name': 'Right Speaker (Haut-parleur droit)', 'available': True},
+        {'id': 'speaker_left', 'name': 'Left Speaker (Haut-parleur gauche)', 'available': True},
         {'id': 'charging_port', 'name': 'Charging Port', 'available': True},
-        {'id': 'logic_board', 'name': 'Logic Board', 'available': True}
+        {'id': 'magsafe', 'name': 'MagSafe 3 Card (Carte MagSafe 3)', 'available': True},
+        {'id': 'usb_c', 'name': 'USB-C Cards (Cartes USB-C)', 'available': True},
+        {'id': 'display_hinge', 'name': 'Display Hinge Covers (Couvercles de charnière)', 'available': True},
+        {'id': 'keys', 'name': 'Individual Keys (Touches)', 'available': True},
+        {'id': 'antenna', 'name': 'Antenna (Antenne)', 'available': True},
+        {'id': 'bottom_case', 'name': 'Bottom Case (Boîtier inférieur)', 'available': True},
+        {'id': 'audio_card', 'name': 'Audio Card (Carte audio)', 'available': True},
+        {'id': 'touch_id', 'name': 'Touch ID Card (Carte du Touch ID)', 'available': True},
+        {'id': 'lid_angle', 'name': 'Lid Angle Sensor (Capteur d\'angle)', 'available': True},
+        {'id': 'other', 'name': 'Other Parts (Autres pièces)', 'available': True}
     ]
     
     return jsonify({
