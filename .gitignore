@@ -47,6 +47,10 @@ Thumbs.db
 # Logs
 *.log
 
+# Debug files
+debug_screenshot.png
+debug_after_selection.png
+
 # Testing
 .pytest_cache/
 .coverage
@@ -54,3 +58,7 @@ htmlcov/
 
 # Deployment
 *.zip
+
+# Database
+users.db
+*.db
