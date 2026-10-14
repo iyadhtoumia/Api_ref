@@ -7,25 +7,30 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from macfax_client import MacfaxClient, MacfaxAPIError, RateLimitError, CreditsExhaustedError
 from apple_scraper import AppleScraper
+from cache import cache
 import os
 import time
+import threading
 
 app = Flask(__name__)
 CORS(app)
 client = MacfaxClient()
 
-# Global scraper instance (reused for efficiency)
+# Thread-safe scraper instance. Each worker thread gets its own Chrome
+# driver internally (capped at MAX_BROWSERS).
+MAX_BROWSERS = 2
 scraper = None
-
-# Simple in-memory cache for configurations
-config_cache = {}
+scraper_lock = threading.Lock()
 CACHE_EXPIRY = 3600  # 1 hour in seconds
 
 def get_scraper():
-    """Get or create scraper instance"""
+    """Get or create the shared thread-safe scraper instance"""
     global scraper
     if scraper is None:
-        scraper = AppleScraper(headless=True)
+        with scraper_lock:
+            if scraper is None:
+                scraper = AppleScraper(headless=True, max_browsers=MAX_BROWSERS)
+            scraper._get_api_client().prewarm()
     return scraper
 
 @app.route('/')
@@ -68,25 +73,19 @@ def get_config():
         return jsonify({'error': 'Missing serial parameter'}), 400
     
     try:
-        # Check cache first
-        cache_key = serial.upper()
-        if cache_key in config_cache:
-            cached_data = config_cache[cache_key]
-            # Check if cache is still valid
-            if time.time() - cached_data['timestamp'] < CACHE_EXPIRY:
-                print(f"[API] Returning cached result for: {serial}")
-                return jsonify({
-                    'success': True,
-                    'data': {
-                        'serial': serial,
-                        'config': cached_data['config'],
-                        'message': 'Configuration retrieved from cache (instant)',
-                        'cached': True
-                    }
-                })
-            else:
-                # Remove expired cache
-                del config_cache[cache_key]
+        # Check shared cache first
+        cached_config = cache.get(serial.upper(), ttl=CACHE_EXPIRY)
+        if cached_config:
+            print(f"[API] Returning cached result for: {serial}")
+            return jsonify({
+                'success': True,
+                'data': {
+                    'serial': serial,
+                    'config': cached_config,
+                    'message': 'Configuration retrieved from cache (instant)',
+                    'cached': True
+                }
+            })
         
         print(f"[API] Getting configuration for serial: {serial}")
         
@@ -96,10 +95,7 @@ def get_config():
         
         if result['success']:
             # Cache the result
-            config_cache[cache_key] = {
-                'config': result['config'],
-                'timestamp': time.time()
-            }
+            cache.set(serial.upper(), result['config'])
             print(f"[API] Cached result for: {serial}")
             
             return jsonify({

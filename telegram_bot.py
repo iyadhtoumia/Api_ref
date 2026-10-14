@@ -10,7 +10,9 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from dotenv import load_dotenv
 from macfax_client import MacfaxClient, MacfaxAPIError
 from apple_scraper import AppleScraper
+from cache import cache
 import time
+import threading
 
 # Load environment variables
 load_dotenv('.env.dev')
@@ -24,62 +26,62 @@ logger = logging.getLogger(__name__)
 
 # Initialize clients
 macfax_client = MacfaxClient()
+MAX_BROWSERS = 2
 scraper = None
+scraper_lock = threading.Lock()
 
-# Simple cache
-config_cache = {}
-CACHE_EXPIRY = 3600  # 1 hour
+# Shared cache TTL (1 hour)
+CACHE_EXPIRY = 3600
 
 def get_scraper():
-    """Get or create scraper instance"""
+    """Get or create the shared thread-safe scraper instance"""
     global scraper
     if scraper is None:
-        scraper = AppleScraper(headless=True)
+        with scraper_lock:
+            if scraper is None:
+                scraper = AppleScraper(headless=True, max_browsers=MAX_BROWSERS)
+            scraper._get_api_client().prewarm()
     return scraper
 
 async def send_config_response(update: Update, serial: str, from_cache: bool = False):
     """Helper function to send configuration response"""
-    cache_key = serial
-    
-    if cache_key in config_cache:
-        cached_data = config_cache[cache_key]
-        if time.time() - cached_data['timestamp'] < CACHE_EXPIRY:
-            config = cached_data['config']
-            response = (
-                f"✅ Configuration (from cache)\n\n"
-                f"🏷️ Serial: {serial}\n"
-                f"🔧 Config: `{config}`\n\n"
-                f"⚡ Retrieved instantly from cache"
-            )
-            await update.message.reply_text(response, parse_mode='Markdown')
-            return True
-        else:
-            del config_cache[cache_key]
-    
+    cached_config = cache.get(serial, ttl=CACHE_EXPIRY)
+    if cached_config:
+        response = (
+            f"✅ Configuration (from cache)\n\n"
+            f"🏷️ Serial: {serial}\n"
+            f"🔧 Config: `{cached_config}`\n\n"
+            f"⚡ Retrieved instantly from cache"
+        )
+        await update.message.reply_text(response, parse_mode='Markdown')
+        return True
+
     return False
 
 async def fetch_and_cache_config(update: Update, serial: str):
     """Fetch configuration from Apple and cache it"""
     try:
-        apple_scraper = get_scraper()
-        result = apple_scraper.get_logic_board_config(serial)
-        
-        if result['success']:
-            config = result['config']
-            
-            config_cache[serial] = {
-                'config': config,
-                'timestamp': time.time()
-            }
-            
-            response = (
-                f"✅ Configuration Retrieved!\n\n"
-                f"🏷️ Serial: {serial}\n"
-                f"🔧 Config: `{config}`\n\n"
-                        )
-            await update.message.reply_text(response, parse_mode='Markdown')
-        else:
-            await update.message.reply_text(f"❌ Error: {result.get('error', 'Configuration not found')}")
+        with cache.lock_for(serial):
+            cached_config = cache.get(serial, ttl=CACHE_EXPIRY)
+            if cached_config:
+                await send_config_response(update, serial, from_cache=True)
+                return
+
+            apple_scraper = get_scraper()
+            result = apple_scraper.get_logic_board_config(serial)
+
+            if result['success']:
+                config = result['config']
+                cache.set(serial, config)
+
+                response = (
+                    f"✅ Configuration Retrieved!\n\n"
+                    f"🏷️ Serial: {serial}\n"
+                    f"🔧 Config: `{config}`\n\n"
+                            )
+                await update.message.reply_text(response, parse_mode='Markdown')
+            else:
+                await update.message.reply_text(f"❌ Error: {result.get('error', 'Configuration not found')}")
     except Exception as e:
         logger.error(f"Config fetch error: {e}")
         await update.message.reply_text(f"❌ Error: {str(e)}")

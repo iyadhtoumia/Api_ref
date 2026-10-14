@@ -13,25 +13,33 @@ import os
 from functools import wraps
 from apple_scraper import AppleScraper
 from macfax_client import MacfaxClient, MacfaxAPIError
+from cache import cache
 import time
+import threading
 
 app = Flask(__name__)
 CORS(app)
 
 # Configuration
 SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key-change-in-production')
-DATABASE = 'users.db'
+DATABASE = os.getenv('DATABASE', 'users.db')
 
 # Initialize clients (same as telegram_bot.py)
 macfax_client = MacfaxClient()
+
+# Single thread-safe scraper instance. Each worker thread gets its own
+# Chrome driver internally (capped at MAX_BROWSERS).
+MAX_BROWSERS = 2
 scraper = None
-config_cache = {}
+scraper_lock = threading.Lock()
 CACHE_EXPIRY = 3600  # 1 hour
 
 def get_db():
     """Get database connection"""
-    conn = sqlite3.connect(DATABASE)
+    conn = sqlite3.connect(DATABASE, timeout=5)
     conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('PRAGMA busy_timeout=5000')
     return conn
 
 def init_db():
@@ -62,11 +70,22 @@ def init_db():
     conn.close()
 
 def get_scraper():
-    """Get or create scraper instance"""
+    """Get or create the shared thread-safe scraper instance"""
     global scraper
     if scraper is None:
-        scraper = AppleScraper(headless=True)
+        with scraper_lock:
+            if scraper is None:
+                scraper = AppleScraper(headless=True, max_browsers=MAX_BROWSERS)
     return scraper
+
+def _startup_prewarm():
+    """Warm the Apple token/DeviceTypes cache so the first lookup is fast."""
+    try:
+        get_scraper()._get_api_client().prewarm()
+    except Exception as e:
+        print(f"[Startup] Prewarm skipped: {e}")
+
+threading.Thread(target=_startup_prewarm, name='startup-prewarm', daemon=True).start()
 
 def token_required(f):
     """Decorator to require authentication"""
@@ -241,106 +260,117 @@ def lookup_config(current_user):
     if len(serial) < 4 or len(serial) > 20:
         return jsonify({'error': 'Invalid serial number format'}), 400
     
-    # Check cache first (FREE - same as telegram bot)
-    cache_key = serial
-    if cache_key in config_cache:
-        cached_data = config_cache[cache_key]
-        if time.time() - cached_data['timestamp'] < CACHE_EXPIRY:
-            print(f"[API] Cache hit for {serial}")
-            return jsonify({
-                'success': True,
-                'serial': serial,
-                'config': cached_data['config'],
-                'cached': True,
-                'coins_spent': 0,
-                'message': 'Retrieved instantly from cache'
-            })
-        else:
-            del config_cache[cache_key]
+    # Fast path: shared cache hit (FREE - same as telegram bot)
+    cached_config = cache.get(serial, ttl=CACHE_EXPIRY)
+    if cached_config:
+        print(f"[API] Cache hit for {serial}")
+        return jsonify({
+            'success': True,
+            'serial': serial,
+            'config': cached_config,
+            'cached': True,
+            'coins_spent': 0,
+            'message': 'Retrieved instantly from cache'
+        })
     
     # Check if user has enough coins
     if current_user['coins'] < 10:
         return jsonify({'error': 'Insufficient coins. You need 10 coins.'}), 400
     
-    print(f"[API] Starting lookup for serial: {serial}")
-    
-    # Perform lookup using Apple Scraper (same as telegram bot - NO TIMEOUT!)
-    try:
-        apple_scraper = get_scraper()
-        print(f"[API] Scraper initialized, calling get_logic_board_config...")
-        
-        # Call scraper directly without timeout (same as Telegram bot)
-        result = apple_scraper.get_logic_board_config(serial)
-        
-        print(f"[API] Scraper returned: success={result.get('success')}")
-        
-        if not result or not isinstance(result, dict):
+    # Single-flight: only one scrape per serial at a time across this process
+    with cache.lock_for(serial):
+        # Re-check cache now that we hold the lock (another thread may have filled it)
+        cached_config = cache.get(serial, ttl=CACHE_EXPIRY)
+        if cached_config:
+            print(f"[API] Cache hit for {serial} (after wait)")
             return jsonify({
-                'success': False,
-                'error': 'Invalid response from scraper'
-            }), 500
+                'success': True,
+                'serial': serial,
+                'config': cached_config,
+                'cached': True,
+                'coins_spent': 0,
+                'message': 'Retrieved instantly from cache'
+            })
         
-        if not result.get('success'):
-            error_msg = result.get('error', 'Configuration not found')
-            print(f"[API] Scraper failed: {error_msg}")
+        print(f"[API] Starting lookup for serial: {serial}")
+        
+        # Perform lookup using Apple Scraper (same as telegram bot - NO TIMEOUT!)
+        try:
+            apple_scraper = get_scraper()
+            print(f"[API] Scraper initialized, calling get_logic_board_config...")
             
-            # Don't charge coins for scraper errors
+            # Call scraper directly without timeout (same as Telegram bot)
+            result = apple_scraper.get_logic_board_config(serial)
+            
+            print(f"[API] Scraper returned: success={result.get('success')}")
+            
+            if not result or not isinstance(result, dict):
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid response from scraper'
+                }), 500
+            
+            if not result.get('success'):
+                error_msg = result.get('error', 'Configuration not found')
+                print(f"[API] Scraper failed: {error_msg}")
+                
+                # Don't charge coins for scraper errors
+                return jsonify({
+                    'success': False,
+                    'error': error_msg,
+                    'debug': 'Serial may be invalid or configuration not available on Apple\'s website.'
+                }), 404
+            
+            config = result.get('config')
+            if not config:
+                return jsonify({
+                    'success': False,
+                    'error': 'Configuration text is empty'
+                }), 404
+            
+            print(f"[API] Success! Config: {config}")
+            
+            # Atomically deduct coins and record the lookup
+            conn = get_db()
+            try:
+                cur = conn.execute(
+                    'UPDATE users SET coins = coins - 10, total_lookups = total_lookups + 1 '
+                    'WHERE id = ? AND coins >= 10',
+                    (current_user['id'],)
+                )
+                if cur.rowcount == 0:
+                    conn.rollback()
+                    return jsonify({'error': 'Insufficient coins. You need 10 coins.'}), 400
+                
+                conn.execute(
+                    'INSERT INTO lookups (user_id, serial, config, coins_spent) VALUES (?, ?, ?, ?)',
+                    (current_user['id'], serial, config, 10)
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            
+            # Cache the result (shared across workers)
+            cache.set(serial, config)
+            print(f"[API] Cached result for {serial}")
+            
+            return jsonify({
+                'success': True,
+                'serial': serial,
+                'config': config,
+                'cached': False,
+                'coins_spent': 10,
+                'message': 'Configuration retrieved successfully'
+            })
+        
+        except Exception as e:
+            print(f"[API] Lookup error: {e}")
+            import traceback
+            traceback.print_exc()
             return jsonify({
                 'success': False,
-                'error': error_msg,
-                'debug': 'Serial may be invalid or configuration not available on Apple\'s website.'
-            }), 404
-        
-        config = result.get('config')
-        if not config:
-            return jsonify({
-                'success': False,
-                'error': 'Configuration text is empty'
-            }), 404
-        
-        print(f"[API] Success! Config: {config}")
-        
-        # Deduct coins and update user
-        conn = get_db()
-        conn.execute(
-            'UPDATE users SET coins = coins - 10, total_lookups = total_lookups + 1 WHERE id = ?',
-            (current_user['id'],)
-        )
-        
-        # Record lookup
-        conn.execute(
-            'INSERT INTO lookups (user_id, serial, config, coins_spent) VALUES (?, ?, ?, ?)',
-            (current_user['id'], serial, config, 10)
-        )
-        
-        conn.commit()
-        conn.close()
-        
-        # Cache the result
-        config_cache[cache_key] = {
-            'config': config,
-            'timestamp': time.time()
-        }
-        
-        print(f"[API] Cached result for {serial}")
-        
-        return jsonify({
-            'success': True,
-            'serial': serial,
-            'config': config,
-            'cached': False,
-            'coins_spent': 10,
-            'message': 'Configuration retrieved successfully'
-        })
-    
-    except Exception as e:
-        print(f"[API] Lookup error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'error': f'System error: {str(e)}'
-        }), 500
+                'error': f'System error: {str(e)}'
+            }), 500
 
 @app.route('/api/history', methods=['GET'])
 @token_required
@@ -362,8 +392,10 @@ def health():
     """Health check"""
     return jsonify({'status': 'healthy'})
 
+# Ensure schema exists for WSGI servers (gunicorn) as well as direct runs
+init_db()
+
 if __name__ == '__main__':
-    init_db()
     port = int(os.environ.get('PORT', 5000))
     # Increase timeout for long-running scraper operations
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
