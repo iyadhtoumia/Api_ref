@@ -35,6 +35,29 @@ export function AuthProvider({ children }) {
 
   const signin = async (email, password) => {
     const response = await axios.post('/api/auth/signin', { email, password })
+    // Step 1: credentials valid, OTP sent
+    if (response.data.otp_required) {
+      return { otpRequired: true, email: response.data.email }
+    }
+    // Fallback: direct login (should not happen with 2FA active)
+    const { token, user } = response.data
+    localStorage.setItem('token', token)
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    setUser(user)
+    return user
+  }
+
+  const verifyOtp = async (email, otp, useTotp = false) => {
+    const response = await axios.post('/api/auth/signin/verify-otp', { email, otp, use_totp: useTotp })
+    const { token, user } = response.data
+    localStorage.setItem('token', token)
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    setUser(user)
+    return user
+  }
+
+  const googleAuth = async (credential) => {
+    const response = await axios.post('/api/auth/google', { credential })
     const { token, user } = response.data
     localStorage.setItem('token', token)
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
@@ -44,11 +67,14 @@ export function AuthProvider({ children }) {
 
   const signup = async (email, password) => {
     const response = await axios.post('/api/auth/signup', { email, password })
-    const { token, user } = response.data
+    // No token returned — user must verify email first
+    return response.data
+  }
+
+  const setUserFromToken = (token, userData) => {
     localStorage.setItem('token', token)
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-    setUser(user)
-    return user
+    setUser(userData)
   }
 
   const signout = () => {
@@ -60,8 +86,11 @@ export function AuthProvider({ children }) {
   const value = {
     user,
     signin,
+    verifyOtp,
+    googleAuth,
     signup,
     signout,
+    setUserFromToken,
     refreshUser: fetchUser
   }
 

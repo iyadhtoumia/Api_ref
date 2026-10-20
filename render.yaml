@@ -9,3 +9,9 @@ services:
         sync: false
       - key: PYTHON_VERSION
         value: 3.12.0
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_MODE
+        value: live

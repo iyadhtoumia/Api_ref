@@ -1,18 +1,3 @@
-"""
-Fast Apple configuration client.
-
-Uses Apple Self Service Repair's own JSON API instead of driving a browser:
-  1. Macfax lookup  -> model_code (e.g. "MBA15M324")
-  2. DeviceTypes    -> deviceModelId (cached in memory + on disk, large list)
-  3. Spares/SearchByDevice?deviceModelId=..&repairTypeId=Logic Board&sn=SERIAL
-     -> the logic board item whose localized name is
-        "Carte logique (M3, processeur central 8 cœurs, ...)"
-
-No reCAPTCHA is required for this path, and round-trips are sub-second.
-The Macfax lookup and the Apple token/DeviceTypes warm-up run in parallel,
-and DeviceTypes is persisted to a temp file so process restarts stay fast.
-"""
-
 import os
 import re
 import json
@@ -137,12 +122,6 @@ class AppleApiClient:
         return None
 
     def _search_by_device(self, device_model_id, serial, hedges=2):
-        """Fire hedged requests and return the first successful result.
-
-        Apple's search endpoint occasionally spikes to several seconds; issuing
-        two parallel identical requests and taking the first response keeps the
-        tail latency low.
-        """
         for attempt in range(2):
             token = self._get_token(force=(attempt > 0))
             executor = ThreadPoolExecutor(max_workers=hedges)
@@ -183,11 +162,6 @@ class AppleApiClient:
         return data.get('model_code') or ''
 
     def _model_code_hedged(self, serial, hedges=2):
-        """Resolve model_code, taking the first of hedged Macfax lookups.
-
-        Macfax bills one credit per distinct serial per 24h, so repeated
-        lookups of the same serial are free and hedging is cost-neutral.
-        """
         executor = ThreadPoolExecutor(max_workers=hedges)
         futures = [executor.submit(self._resolve_model_code, serial) for _ in range(hedges)]
         try:
@@ -204,7 +178,6 @@ class AppleApiClient:
 
     # ---- public ----
     def prewarm(self):
-        """Warm the Apple token + DeviceTypes cache in the background (best effort)."""
         with self._lock:
             if self._prewarm_started:
                 return
@@ -223,7 +196,6 @@ class AppleApiClient:
         threading.Thread(target=_run, name='apple-api-prewarm', daemon=True).start()
 
     def get_config(self, serial):
-        """Return {'success', 'config', 'serial'} or {'success': False, 'error'}."""
         serial = (serial or '').strip().upper()
         if not serial:
             return {'success': False, 'error': 'Serial number required'}

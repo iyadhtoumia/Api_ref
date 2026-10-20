@@ -1,11 +1,3 @@
-"""
-Apple Self Service Repair Scraper
-Automates the process of fetching logic board configuration from Apple's repair site
-
-Thread-safe: each worker thread owns its own Chrome driver (thread-local),
-and the number of concurrent browsers is capped by a semaphore.
-"""
-
 import re
 import html
 import time
@@ -202,15 +194,6 @@ class AppleScraper:
         return None
 
     def get_logic_board_config(self, serial_number):
-        """
-        Main method to get logic board configuration from Apple Self Service Repair
-
-        Args:
-            serial_number (str): Device serial number
-
-        Returns:
-            dict: Contains success status and config text or error message
-        """
         if self._use_api:
             try:
                 api_result = self._get_api_client().get_config(serial_number)
