@@ -771,6 +771,7 @@ export default function Dashboard() {
       {/* navbar */}
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 flex items-center gap-1 h-14">
+          <img src="/logo-light.png" alt="Macloop" className="h-8 mr-4" />
           {navItems.map(n => (
             <button key={n.id} onClick={() => setActiveNav(n.id)}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeNav === n.id ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300'}`}>

@@ -149,11 +149,11 @@ export default function SignIn() {
   )
 
   const logo = (
-    <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-primary-container to-secondary flex items-center justify-center shadow-lg mb-4">
-      <svg className="w-6 h-6 text-on-primary" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" viewBox="0 0 24 24">
-        <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-      </svg>
-    </div>
+    <img 
+      src="/logo-icon.png" 
+      alt="Macloop" 
+      className="h-16 mb-4"
+    />
   )
 
   if (otpStep) {
