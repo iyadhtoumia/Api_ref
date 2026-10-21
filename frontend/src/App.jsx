@@ -1,15 +1,18 @@
-import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import React, { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { trackPageView } from './utils/analytics'
 import SignIn from './pages/SignIn'
 import SignUp from './pages/SignUp'
 import Dashboard from './pages/Dashboard'
 import Verify from './pages/Verify'
 import Services from './pages/Services'
+import FAQ from './pages/FAQ'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminUsers from './pages/admin/AdminUsers'
 import AdminServices from './pages/admin/AdminServices'
 import AdminTransactions from './pages/admin/AdminTransactions'
+import AdminFAQs from './pages/admin/AdminFAQs'
 import AdminLayout from './pages/admin/AdminLayout'
 
 function PrivateRoute({ children }) {
@@ -29,15 +32,28 @@ function AdminRoute({ children }) {
   return children
 }
 
+// Component to track page views
+function Analytics() {
+  const location = useLocation()
+  
+  useEffect(() => {
+    trackPageView(location.pathname + location.search)
+  }, [location])
+  
+  return null
+}
+
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <Analytics />
         <Routes>
           <Route path="/signin" element={<PublicRoute><SignIn /></PublicRoute>} />
           <Route path="/signup" element={<PublicRoute><SignUp /></PublicRoute>} />
           <Route path="/verify" element={<Verify />} />
           <Route path="/services" element={<Services />} />
+          <Route path="/faq" element={<FAQ />} />
           <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
 
           {/* Admin routes */}
@@ -47,6 +63,7 @@ function App() {
             <Route path="users"        element={<AdminUsers />} />
             <Route path="services"     element={<AdminServices />} />
             <Route path="transactions" element={<AdminTransactions />} />
+            <Route path="faqs"         element={<AdminFAQs />} />
           </Route>
 
           <Route path="/" element={<Navigate to="/dashboard" />} />

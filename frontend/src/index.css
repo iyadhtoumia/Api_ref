@@ -7,8 +7,31 @@
     margin: 0;
     padding: 0;
   }
+  
   body {
     overscroll-behavior: none;
+    @apply bg-white text-gray-900;
+  }
+  
+  html.dark body {
+    @apply bg-gray-900 text-gray-100;
+  }
+  
+  /* Dark mode input fields */
+  html.dark input[type="text"],
+  html.dark input[type="email"],
+  html.dark input[type="password"],
+  html.dark input[type="number"],
+  html.dark textarea {
+    @apply bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400;
+  }
+  
+  html.dark input[type="text"]:focus,
+  html.dark input[type="email"]:focus,
+  html.dark input[type="password"]:focus,
+  html.dark input[type="number"]:focus,
+  html.dark textarea:focus {
+    @apply ring-gray-500 border-gray-500;
   }
 }
 

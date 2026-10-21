@@ -28,7 +28,12 @@ app = Flask(__name__)
 CORS(app)
 
 # Configuration
-SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key-change-in-production')
+SECRET_KEY = os.getenv('SECRET_KEY', '')
+if not SECRET_KEY:
+    raise RuntimeError(
+        'SECRET_KEY environment variable is not set. '
+        'Generate one with: python -c "import secrets; print(secrets.token_hex(64))"'
+    )
 DATABASE = os.getenv('DATABASE', 'users.db')
 
 stripe.api_key = os.getenv('STRIPE_SECRET_KEY', '')
@@ -170,11 +175,27 @@ def init_db():
         ('banned',        'INTEGER NOT NULL DEFAULT 0'),
         ('totp_secret',   'TEXT'),
         ('totp_enabled',  'INTEGER NOT NULL DEFAULT 0'),
+        ('otp_attempts',  'INTEGER NOT NULL DEFAULT 0'),
+        ('otp_locked_until', 'TIMESTAMP'),
     ]:
         try:
             conn.execute(f'ALTER TABLE users ADD COLUMN {col} {definition}')
         except Exception:
             pass
+    
+    # FAQ table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS faqs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            position INTEGER NOT NULL DEFAULT 0,
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
     conn.commit()
     conn.close()
     _bootstrap_admin()
@@ -246,6 +267,10 @@ def token_required(f):
             if not user:
                 return jsonify({'error': 'User not found'}), 401
             
+            # Enforce suspension
+            if user.get('banned'):
+                return jsonify({'error': 'Account is suspended'}), 403
+            
             return f(dict(user), *args, **kwargs)
         
         except jwt.ExpiredSignatureError:
@@ -297,7 +322,10 @@ def signup():
     existing = conn.execute('SELECT id FROM users WHERE email = ?', (email,)).fetchone()
     if existing:
         conn.close()
-        return jsonify({'error': 'Email already registered'}), 400
+        # Don't reveal that email exists
+        return jsonify({
+            'message': 'If this email is not already registered, you will receive a verification link.'
+        }), 201
 
     password_hash = generate_password_hash(password)
     token = secrets.token_urlsafe(32)
@@ -403,8 +431,32 @@ def signin():
             'error': 'Please verify your email before signing in.',
             'unverified': True
         }), 403
+    
+    # Enforce suspension at sign-in
+    if user.get('banned'):
+        conn.close()
+        return jsonify({'error': 'Account is suspended'}), 403
 
-    # Generate 6-digit OTP
+    # Skip OTP for admin accounts (for easier access)
+    if user.get('is_admin'):
+        conn.close()
+        token = jwt.encode({
+            'user_id': user['id'],
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)
+        }, SECRET_KEY, algorithm='HS256')
+        
+        return jsonify({
+            'token': token,
+            'user': {
+                'id': user['id'],
+                'email': user['email'],
+                'balance_eur': user['balance_eur'],
+                'total_lookups': user['total_lookups'],
+                'is_admin': True,
+            }
+        })
+
+    # Generate 6-digit OTP for regular users
     otp = str(secrets.randbelow(900000) + 100000)
     otp_expires = datetime.datetime.utcnow() + datetime.timedelta(minutes=10)
     conn.execute(
@@ -436,34 +488,71 @@ def signin_verify_otp():
 
     conn = get_db()
     user = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
-    conn.close()
 
     if not user:
+        conn.close()
         return jsonify({'error': 'Invalid request'}), 400
+
+    # Check rate limit
+    otp_locked_until = user.get('otp_locked_until')
+    if otp_locked_until:
+        try:
+            locked_until = datetime.datetime.fromisoformat(otp_locked_until)
+            if datetime.datetime.utcnow() < locked_until:
+                conn.close()
+                return jsonify({'error': 'Too many failed attempts. Please try again later.'}), 429
+        except Exception:
+            pass
 
     if use_totp:
         # Verify against Google Authenticator TOTP
         import pyotp
         if not user['totp_enabled'] or not user['totp_secret']:
+            conn.close()
             return jsonify({'error': 'Authenticator app is not set up for this account'}), 400
         totp = pyotp.TOTP(user['totp_secret'])
         if not totp.verify(otp, valid_window=1):
+            conn.close()
             return jsonify({'error': 'Invalid authenticator code'}), 401
     else:
         # Verify email OTP
         if not user['otp_code'] or user['otp_code'] != otp:
-            return jsonify({'error': 'Invalid verification code'}), 401
+            # Increment failed attempts
+            attempts = user.get('otp_attempts', 0) + 1
+            if attempts >= 5:
+                # Lock for 15 minutes after 5 failed attempts
+                locked_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
+                conn.execute(
+                    'UPDATE users SET otp_attempts = 0, otp_locked_until = ? WHERE id = ?',
+                    (locked_until.isoformat(), user['id'])
+                )
+                conn.commit()
+                conn.close()
+                return jsonify({'error': 'Too many failed attempts. Account locked for 15 minutes.'}), 429
+            else:
+                conn.execute(
+                    'UPDATE users SET otp_attempts = ? WHERE id = ?',
+                    (attempts, user['id'])
+                )
+                conn.commit()
+                conn.close()
+                return jsonify({'error': 'Invalid verification code'}), 401
         try:
             expires = datetime.datetime.fromisoformat(user['otp_expires'])
             if datetime.datetime.utcnow() > expires:
+                conn.close()
                 return jsonify({'error': 'Verification code has expired. Please sign in again.', 'expired': True}), 401
         except Exception:
+            conn.close()
             return jsonify({'error': 'Invalid code'}), 400
-        # Clear email OTP
-        conn = get_db()
-        conn.execute('UPDATE users SET otp_code = NULL, otp_expires = NULL WHERE id = ?', (user['id'],))
+        # Clear email OTP and reset attempts
+        conn.execute(
+            'UPDATE users SET otp_code = NULL, otp_expires = NULL, otp_attempts = 0, otp_locked_until = NULL WHERE id = ?',
+            (user['id'],)
+        )
         conn.commit()
-        conn.close()
+
+    conn.close()
 
     token = jwt.encode({
         'user_id': user['id'],
@@ -816,6 +905,7 @@ def totp_disable(current_user):
 def submit_support(current_user):
     """Send a support request email from the logged-in user."""
     try:
+        import html
         data = request.json or {}
         subject = data.get('subject', '').strip()
         description = data.get('description', '').strip()
@@ -823,33 +913,146 @@ def submit_support(current_user):
         if not description:
             return jsonify({'error': 'Description is required'}), 400
 
-        email_subject = f"[Support] {subject}" if subject else "[Support] New request"
+        # Escape user content to prevent HTML injection
+        subject_escaped = html.escape(subject)
+        description_escaped = html.escape(description)
+        email_escaped = html.escape(current_user['email'])
+
+        email_subject = f"[Support] {subject_escaped}" if subject else "[Support] New request"
         subject_row = (
             f'<tr><td style="padding:8px 0;color:#555;font-size:13px;">Subject</td>'
-            f'<td style="padding:8px 0;font-size:14px;color:#111;">{subject}</td></tr>'
+            f'<td style="padding:8px 0;font-size:14px;color:#111;">{subject_escaped}</td></tr>'
             if subject else ''
         )
-        html = f"""
+        html_body = f"""
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;background:#fff;border-radius:12px;">
           <h2 style="color:#111;margin-bottom:4px;">Support Request</h2>
           <p style="color:#999;font-size:13px;margin-bottom:24px;">Submitted via the dashboard</p>
           <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
-            <tr><td style="padding:8px 0;color:#555;font-size:13px;width:100px;">From</td><td style="padding:8px 0;font-size:14px;color:#111;">{current_user['email']}</td></tr>
+            <tr><td style="padding:8px 0;color:#555;font-size:13px;width:100px;">From</td><td style="padding:8px 0;font-size:14px;color:#111;">{email_escaped}</td></tr>
             <tr><td style="padding:8px 0;color:#555;font-size:13px;">User ID</td><td style="padding:8px 0;font-size:14px;color:#111;">#{current_user['id']}</td></tr>
             {subject_row}
           </table>
-          <div style="background:#f9f9f9;border-radius:8px;padding:16px 20px;font-size:14px;color:#333;line-height:1.7;white-space:pre-wrap;">{description}</div>
+          <div style="background:#f9f9f9;border-radius:8px;padding:16px 20px;font-size:14px;color:#333;line-height:1.7;white-space:pre-wrap;">{description_escaped}</div>
         </div>
         """
         subject_line = f"Subject: {subject}\n" if subject else ''
         text = f"Support request from {current_user['email']} (#{current_user['id']})\n\n{subject_line}{description}"
 
-        _send(os.getenv('MAIL_FROM'), email_subject, html, text)
+        _send(os.getenv('MAIL_FROM'), email_subject, html_body, text)
         return jsonify({'status': 'sent'})
     except Exception as e:
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+
+# ── FAQ Routes ────────────────────────────────────────────────────────────────
+
+@app.route('/api/faqs', methods=['GET'])
+def get_faqs():
+    """Get all active FAQs (public endpoint)."""
+    conn = get_db()
+    faqs = conn.execute(
+        'SELECT id, question, answer, position FROM faqs WHERE active = 1 ORDER BY position ASC, id ASC'
+    ).fetchall()
+    conn.close()
+    return jsonify({'faqs': [dict(f) for f in faqs]})
+
+
+@app.route('/api/admin/faqs', methods=['GET'])
+@admin_required
+def admin_get_faqs(_admin):
+    """Get all FAQs including inactive ones."""
+    conn = get_db()
+    faqs = conn.execute(
+        'SELECT id, question, answer, position, active, created_at, updated_at FROM faqs ORDER BY position ASC, id ASC'
+    ).fetchall()
+    conn.close()
+    return jsonify({'faqs': [dict(f) for f in faqs]})
+
+
+@app.route('/api/admin/faqs', methods=['POST'])
+@admin_required
+def admin_create_faq(_admin):
+    """Create a new FAQ."""
+    data = request.json or {}
+    question = data.get('question', '').strip()
+    answer = data.get('answer', '').strip()
+    position = int(data.get('position', 0))
+    active = 1 if data.get('active', True) else 0
+    
+    if not question or not answer:
+        return jsonify({'error': 'Question and answer are required'}), 400
+    
+    conn = get_db()
+    cursor = conn.execute(
+        'INSERT INTO faqs (question, answer, position, active) VALUES (?, ?, ?, ?)',
+        (question, answer, position, active)
+    )
+    faq_id = cursor.lastrowid
+    conn.commit()
+    
+    faq = conn.execute('SELECT * FROM faqs WHERE id = ?', (faq_id,)).fetchone()
+    conn.close()
+    return jsonify({'faq': dict(faq)}), 201
+
+
+@app.route('/api/admin/faqs/<int:faq_id>', methods=['PATCH'])
+@admin_required
+def admin_update_faq(_admin, faq_id):
+    """Update an existing FAQ."""
+    data = request.json or {}
+    conn = get_db()
+    
+    faq = conn.execute('SELECT id FROM faqs WHERE id = ?', (faq_id,)).fetchone()
+    if not faq:
+        conn.close()
+        return jsonify({'error': 'FAQ not found'}), 404
+    
+    updates, params = [], []
+    if 'question' in data:
+        updates.append('question = ?')
+        params.append(data['question'].strip())
+    if 'answer' in data:
+        updates.append('answer = ?')
+        params.append(data['answer'].strip())
+    if 'position' in data:
+        updates.append('position = ?')
+        params.append(int(data['position']))
+    if 'active' in data:
+        updates.append('active = ?')
+        params.append(1 if data['active'] else 0)
+    
+    if not updates:
+        conn.close()
+        return jsonify({'error': 'Nothing to update'}), 400
+    
+    updates.append('updated_at = CURRENT_TIMESTAMP')
+    params.append(faq_id)
+    
+    conn.execute(f'UPDATE faqs SET {", ".join(updates)} WHERE id = ?', params)
+    conn.commit()
+    
+    updated = conn.execute('SELECT * FROM faqs WHERE id = ?', (faq_id,)).fetchone()
+    conn.close()
+    return jsonify({'faq': dict(updated)})
+
+
+@app.route('/api/admin/faqs/<int:faq_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_faq(_admin, faq_id):
+    """Delete an FAQ."""
+    conn = get_db()
+    faq = conn.execute('SELECT id FROM faqs WHERE id = ?', (faq_id,)).fetchone()
+    if not faq:
+        conn.close()
+        return jsonify({'error': 'FAQ not found'}), 404
+    
+    conn.execute('DELETE FROM faqs WHERE id = ?', (faq_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'FAQ deleted'})
 
 
 @token_required
@@ -914,6 +1117,10 @@ def lookup_config(current_user):
         return jsonify({'error': 'Invalid or inactive service'}), 400
 
     amount_cents = round(service['price'] * 100)  # convert EUR price to cents
+    
+    # Validate price is non-negative (defense in depth)
+    if amount_cents < 0:
+        return jsonify({'error': 'Invalid service price'}), 500
 
     if current_user['balance_eur'] < amount_cents:
         return jsonify({'error': f'Insufficient balance. Need €{service["price"]:.3f}'}), 400
@@ -1135,10 +1342,16 @@ def verify_payment_session(current_user):
             return jsonify({'status': 'not_paid'}), 200
 
         payment_intent = session.payment_intent or ''
-        conn.execute(
-            'UPDATE payments SET status = ?, stripe_payment_intent = ? WHERE stripe_session_id = ?',
-            ('paid', payment_intent, session_id)
-        )
+        
+        # Atomic update: only credit if still pending
+        updated = conn.execute(
+            'UPDATE payments SET status = ?, stripe_payment_intent = ? WHERE stripe_session_id = ? AND status = ?',
+            ('paid', payment_intent, session_id, 'pending')
+        ).rowcount
+        
+        if updated == 0:
+            return jsonify({'status': 'already_credited'}), 200
+            
         conn.execute(
             'UPDATE users SET balance_eur = balance_eur + ? WHERE id = ?',
             (payment['amount_eur'], current_user['id'])
@@ -1184,14 +1397,17 @@ def stripe_webhook():
             user_id = payment['user_id']
             payment_intent = session.payment_intent or ''
 
-            conn.execute(
-                'UPDATE payments SET status = ?, stripe_payment_intent = ? WHERE stripe_session_id = ?',
-                ('paid', payment_intent, session_id)
-            )
-            conn.execute(
-                'UPDATE users SET balance_eur = balance_eur + ? WHERE id = ?',
-                (amount_cents, user_id)
-            )
+            # Atomic update: only credit if still pending
+            updated = conn.execute(
+                'UPDATE payments SET status = ?, stripe_payment_intent = ? WHERE stripe_session_id = ? AND status = ?',
+                ('paid', payment_intent, session_id, 'pending')
+            ).rowcount
+            
+            if updated > 0:
+                conn.execute(
+                    'UPDATE users SET balance_eur = balance_eur + ? WHERE id = ?',
+                    (amount_cents, user_id)
+                )
             conn.commit()
         finally:
             conn.close()
@@ -1289,10 +1505,16 @@ def paypal_capture_order(current_user):
             return jsonify({'error': error_msg}), 502
 
         amount_cents = record['amount_eur']
-        conn.execute(
-            'UPDATE payments SET status = ? WHERE stripe_session_id = ?',
-            ('paid', paypal_payment_id)
-        )
+        
+        # Atomic update: only credit if still pending
+        updated = conn.execute(
+            'UPDATE payments SET status = ? WHERE stripe_session_id = ? AND status = ?',
+            ('paid', paypal_payment_id, 'pending')
+        ).rowcount
+        
+        if updated == 0:
+            return jsonify({'status': 'already_credited'}), 200
+            
         conn.execute(
             'UPDATE users SET balance_eur = balance_eur + ? WHERE id = ?',
             (amount_cents, current_user['id'])
@@ -1306,9 +1528,33 @@ def paypal_capture_order(current_user):
 @app.route('/api/payments/paypal/webhook', methods=['POST'])
 def paypal_webhook():
     """
-    PayPal IPN / webhook listener.
+    PayPal IPN / webhook listener with signature verification.
     Handles PAYMENT.SALE.COMPLETED as a fallback in case the capture endpoint was missed.
     """
+    # Get the raw POST body and headers for verification
+    transmission_id = request.headers.get('Paypal-Transmission-Id')
+    transmission_time = request.headers.get('Paypal-Transmission-Time')
+    cert_url = request.headers.get('Paypal-Cert-Url')
+    auth_algo = request.headers.get('Paypal-Auth-Algo')
+    transmission_sig = request.headers.get('Paypal-Transmission-Sig')
+    webhook_id = os.getenv('PAYPAL_WEBHOOK_ID', '')
+
+    if not webhook_id:
+        # Fail closed if webhook verification is not configured
+        return jsonify({'error': 'PayPal webhook not configured'}), 500
+
+    # Verify the webhook signature
+    try:
+        webhook_event = paypalrestsdk.WebhookEvent(request.json or {})
+        if not webhook_event.verify(
+            transmission_id, transmission_time, webhook_id,
+            request.get_data(as_text=True), cert_url, auth_algo, transmission_sig
+        ):
+            return jsonify({'error': 'Invalid signature'}), 400
+    except Exception as e:
+        print(f'[PayPal] Webhook verification failed: {e}')
+        return jsonify({'error': 'Verification failed'}), 400
+
     data = request.json or {}
     event_type = data.get('event_type', '')
 
@@ -1316,7 +1562,6 @@ def paypal_webhook():
         return jsonify({'status': 'ignored'}), 200
 
     resource = data.get('resource', {})
-    # The parent payment id is in the sale's parent_payment field
     parent_payment_id = resource.get('parent_payment', '')
     if not parent_payment_id:
         return jsonify({'status': 'ignored'}), 200
@@ -1324,21 +1569,25 @@ def paypal_webhook():
     conn = get_db()
     try:
         record = conn.execute(
-            'SELECT * FROM payments WHERE stripe_session_id = ? AND provider = ?',
-            (parent_payment_id, 'paypal')
+            'SELECT * FROM payments WHERE stripe_session_id = ? AND provider = ? AND status = ?',
+            (parent_payment_id, 'paypal', 'pending')
         ).fetchone()
 
-        if not record or record['status'] == 'paid':
+        if not record:
+            # Not found or already processed
             return jsonify({'status': 'ok'}), 200
 
-        conn.execute(
-            'UPDATE payments SET status = ? WHERE stripe_session_id = ?',
-            ('paid', parent_payment_id)
-        )
-        conn.execute(
-            'UPDATE users SET balance_eur = balance_eur + ? WHERE id = ?',
-            (record['amount_eur'], record['user_id'])
-        )
+        # Atomic update: only credit if still pending
+        updated = conn.execute(
+            'UPDATE payments SET status = ? WHERE stripe_session_id = ? AND status = ?',
+            ('paid', parent_payment_id, 'pending')
+        ).rowcount
+
+        if updated > 0:
+            conn.execute(
+                'UPDATE users SET balance_eur = balance_eur + ? WHERE id = ?',
+                (record['amount_eur'], record['user_id'])
+            )
         conn.commit()
     finally:
         conn.close()
@@ -1389,9 +1638,9 @@ def get_services():
 
 
 @app.route('/api/admin/sync-services', methods=['POST'])
-@token_required
-def admin_sync_services(current_user):
-    """Manually trigger a service sync. Admin only (first user or add role check later)."""
+@admin_required
+def admin_sync_services(_admin):
+    """Manually trigger a service sync."""
     def _run():
         sync_all(verbose=True)
     threading.Thread(target=_run, daemon=True, name='manual-sync').start()
@@ -1399,8 +1648,8 @@ def admin_sync_services(current_user):
 
 
 @app.route('/api/admin/import-services', methods=['POST'])
-@token_required
-def admin_import_services(current_user):
+@admin_required
+def admin_import_services(_admin):
     """
     Bulk upsert services. Body: { "services": [{id, name, category, price}, ...] }
     Use this to update prices or add new services manually.
@@ -1434,8 +1683,8 @@ def admin_import_services(current_user):
 
 
 @app.route('/api/admin/services-status', methods=['GET'])
-@token_required
-def admin_services_status(current_user):
+@admin_required
+def admin_services_status(_admin):
     """Return all services with their sync status."""
     conn = get_db()
     rows = conn.execute(
@@ -1600,6 +1849,8 @@ def admin_create_service(_admin):
         name     = str(data['name']).strip()
         category = str(data['category']).strip()
         price    = float(data['price'])
+        if price < 0 or not float('inf') > price:
+            return jsonify({'error': 'Price must be non-negative and finite'}), 400
     except (KeyError, ValueError, TypeError):
         return jsonify({'error': 'id, name, category, price are required'}), 400
     conn = get_db()
@@ -1631,8 +1882,16 @@ def admin_update_service(_admin, service_id):
     if 'name'     in data: updates.append('name = ?');     params.append(str(data['name']).strip())
     if 'category' in data: updates.append('category = ?'); params.append(str(data['category']).strip())
     if 'price'    in data:
-        try:    updates.append('price = ?'); params.append(float(data['price']))
-        except: conn.close(); return jsonify({'error': 'Invalid price'}), 400
+        try:
+            price = float(data['price'])
+            if price < 0 or not float('inf') > price:
+                conn.close()
+                return jsonify({'error': 'Price must be non-negative and finite'}), 400
+            updates.append('price = ?')
+            params.append(price)
+        except:
+            conn.close()
+            return jsonify({'error': 'Invalid price'}), 400
     if 'active'   in data: updates.append('active = ?');   params.append(1 if data['active'] else 0)
 
     if not updates:
@@ -1750,10 +2009,17 @@ def admin_refund(_admin, payment_id):
         return jsonify({'error': 'Only paid payments can be refunded'}), 400
 
     refunded_at = datetime.datetime.utcnow().isoformat()
-    conn.execute(
-        'UPDATE payments SET status = ?, refunded_at = ? WHERE id = ?',
-        ('refunded', refunded_at, payment_id)
-    )
+    
+    # Atomic update: only refund if still paid
+    updated = conn.execute(
+        'UPDATE payments SET status = ?, refunded_at = ? WHERE id = ? AND status = ?',
+        ('refunded', refunded_at, payment_id, 'paid')
+    ).rowcount
+    
+    if updated == 0:
+        conn.close()
+        return jsonify({'error': 'Already refunded'}), 409
+        
     conn.execute(
         'UPDATE users SET balance_eur = balance_eur + ? WHERE id = ?',
         (payment['amount_eur'], payment['user_id'])

@@ -59,7 +59,7 @@ export default function SignUp() {
   }
 
   return (
-    <div className="bg-background min-h-screen flex flex-col justify-center items-center text-on-surface antialiased">
+    <div className="bg-background dark:bg-gray-900 min-h-screen flex flex-col justify-center items-center text-on-surface dark:text-gray-100 antialiased">
       <main className="w-full flex justify-center items-center">
         <div className="flex flex-col w-full items-center justify-center py-10 px-4 relative overflow-hidden">
           <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[720px] h-[480px] bg-gradient-to-b from-primary-container/20 via-secondary-container/10 to-transparent blur-3xl pointer-events-none rounded-full" />

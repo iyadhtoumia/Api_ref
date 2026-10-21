@@ -175,6 +175,12 @@ def import_services(rows: list) -> dict:
     count = 0
     for svc in rows:
         try:
+            # Validate price is non-negative and finite
+            price = float(svc.get('price', 0))
+            if price < 0 or not float('inf') > price:
+                print(f'[Import] Skipped service {svc.get("id")}: invalid price {price}')
+                continue
+            
             conn.execute('''
                 INSERT INTO services (id, name, category, price, active)
                 VALUES (:id, :name, :category, :price, 1)

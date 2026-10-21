@@ -49,7 +49,7 @@ export default function Verify() {
   }
 
   return (
-    <div className="bg-background min-h-screen flex flex-col justify-center items-center text-on-surface antialiased px-4">
+    <div className="bg-background dark:bg-gray-900 min-h-screen flex flex-col justify-center items-center text-on-surface dark:text-gray-100 antialiased px-4">
       <div className="bg-surface-container/90 backdrop-blur-xl rounded-3xl p-8 shadow-xl w-full max-w-md text-center">
 
         {status === 'verifying' && (

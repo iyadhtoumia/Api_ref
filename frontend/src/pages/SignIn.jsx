@@ -158,7 +158,7 @@ export default function SignIn() {
 
   if (otpStep) {
     return (
-      <div className="bg-background min-h-screen flex flex-col justify-center items-center text-on-surface antialiased">
+      <div className="bg-background dark:bg-gray-900 min-h-screen flex flex-col justify-center items-center text-on-surface dark:text-gray-100 antialiased">
         <main className="w-full flex justify-center items-center">
           <div className="flex flex-col w-full items-center justify-center py-10 px-4 relative overflow-hidden">
             {gradientBg}
@@ -230,7 +230,7 @@ export default function SignIn() {
   }
 
   return (
-    <div className="bg-background min-h-screen flex flex-col justify-center items-center text-on-surface antialiased">
+    <div className="bg-background dark:bg-gray-900 min-h-screen flex flex-col justify-center items-center text-on-surface dark:text-gray-100 antialiased">
       <main className="w-full flex justify-center items-center">
         <div className="flex flex-col w-full items-center justify-center py-10 px-4 relative overflow-hidden">
           {gradientBg}
